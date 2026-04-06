@@ -1,0 +1,22 @@
+{
+  "venueBaseUrl": "https://play.tennis.com.au/CaberParkTennisCourts/Booking/BookByDate",
+  "defaultSessionStart": "07:30",
+  "defaultSessionEnd": "11:30",
+  "accounts": [
+    {
+      "id": "primary",
+      "label": "Primary member",
+      "username": "your.email@example.com",
+      "password": "REPLACE_ME",
+      "active": true,
+      "maxBookingsPerDay": 2
+    },
+    {
+      "id": "secondary",
+      "label": "Partner / spare account",
+      "username": "partner@example.com",
+      "password": "REPLACE_ME",
+      "maxBookingsPerDay": 2
+    }
+  ]
+}

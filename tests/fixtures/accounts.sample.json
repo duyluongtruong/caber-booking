@@ -1,0 +1,30 @@
+{
+  "venueBaseUrl": "https://example.test/venue/booking",
+  "defaultSessionStart": "08:00",
+  "defaultSessionEnd": "12:00",
+  "accounts": [
+    {
+      "id": "acc-alpha",
+      "label": "Alpha test account",
+      "username": "alpha_fixture_user",
+      "password": "fake-secret-alpha",
+      "active": true,
+      "maxBookingsPerDay": 2
+    },
+    {
+      "id": "acc-beta",
+      "label": "Beta test account",
+      "username": "beta_fixture_user",
+      "password": "fake-secret-beta",
+      "active": false,
+      "maxBookingsPerDay": 2
+    },
+    {
+      "id": "acc-gamma",
+      "label": "Gamma test account",
+      "username": "gamma_fixture_user",
+      "password": "fake-secret-gamma",
+      "active": true
+    }
+  ]
+}

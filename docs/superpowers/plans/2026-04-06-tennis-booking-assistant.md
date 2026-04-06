@@ -81,13 +81,15 @@ tennis-booking/
 
 ## Phase 2: Local config (plain Clubspark accounts)
 
-- [ ] **Task 3 — Config loader**
+**Subagents (done):** Task 3 files + tests and README were produced **in parallel** (separate agents, disjoint paths); **integrator** added `commander` + `@types/node`, `config check` wiring, `loadConfig` guard for zero active accounts, removed stub `node-minimal.d.ts`, single commit.
+
+- [x] **Task 3 — Config loader**
   - **Create** `config/accounts.example.json`: optional top-level keys (e.g. `venueBaseUrl`, default session times) plus **`accounts`**: `[{ "id", "label", "username", "password", "active": true }]` with placeholders; operators **copy** to `config/accounts.local.json` and fill real passwords.
   - **Create** `src/loadConfig.ts`: `loadConfig(configPath)` → `{ accounts: BookingAccount[], venueBaseUrl?: string, ... }` validated (Zod or hand validation); path from env `TENNIS_BOOKING_ACCOUNTS` or default `config/accounts.local.json`.
   - **Create** `tests/loadConfig.test.ts`: load a **fixture** file from `tests/fixtures/accounts.sample.json` (test-only fake passwords); assert parse + filter `active`.
   - **Commit:** `feat(config): load accounts from local json`.
 
-- [ ] **Task 4 — CLI validation**
+- [x] **Task 4 — CLI validation**
   - **Wire** `src/cli.ts`: subcommand `config check` that loads `accounts.local.json` and prints **labels + usernames only** (never print passwords to stdout); exit non-zero if file missing or invalid.
   - README: **chmod 600** on `accounts.local.json`; never commit; backup awareness.
   - **Commit:** `feat(cli): validate accounts config without leaking secrets`.
