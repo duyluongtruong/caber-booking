@@ -1,10 +1,10 @@
 /**
- * Clubspark / Caber Park UI selectors.
+ * Clubspark / Caber Park — values for Playwright locators.
  *
- * Fill these from `docs/superpowers/notes/clubspark-ui-spike.md` after running:
- *   npm run codegen
+ * Mapped from Playwright codegen (deduplicated). Adapter should map each
+ * `LocatorSpec` to `page.getBy*` / `page.locator` calls.
  *
- * Do not guess production selectors — use codegen + spike notes.
+ * Full spike notes: `docs/superpowers/notes/clubspark-ui-spike.md`
  */
 
 export const CABER_PARK_BOOKING_BASE =
@@ -19,41 +19,180 @@ export function bookingUrl(opts?: { date?: string; role?: "guest" | "member" }) 
   return `${CABER_PARK_BOOKING_BASE}${hash}`;
 }
 
-// --- Sign-in (replace TODOs after spike) ---
+/** How to find one control; adapter maps this to Playwright calls. */
+export type LocatorSpec =
+  | {
+      kind: "role";
+      role: "link" | "button" | "textbox" | "combobox" | "spinbutton" | "heading" | "dialog";
+      name: string | RegExp;
+    }
+  | { kind: "label"; text: string | RegExp }
+  | { kind: "placeholder"; text: string | RegExp }
+  | { kind: "text"; text: string | RegExp }
+  | { kind: "testId"; id: string }
+  | { kind: "title"; text: string }
+  | { kind: "css"; selector: string };
+
+// --- Sign-in (one clean sequence; ignore duplicate retries from codegen) ---
 
 export const SIGN_IN = {
-  /** e.g. link or button to open auth */
-  entry: "TODO",
-  username: "TODO",
-  password: "TODO",
-  submit: "TODO",
-} as const;
+  entry: { kind: "testId", id: "sign-in-link" } as const,
+  username: { kind: "role", role: "textbox", name: "Email address" } as const,
+  password: { kind: "role", role: "textbox", name: "Password" } as const,
+  submit: { kind: "role", role: "button", name: "Sign in" } as const,
+};
 
-// --- Date / court / slot (replace after spike) ---
+/** Optional: appears after load / login. Close instead of clicking the dialog body. */
+export const COOKIE_CONSENT = {
+  close: { kind: "role", role: "button", name: "Close this dialog" } as const,
+  /** Only if you need to target the banner (prefer `close`). */
+  dialog: { kind: "role", role: "dialog", name: "Cookie Consent Banner" } as const,
+};
+
+// --- Date → court/time cell (from codegen; duplicates removed) ---
 
 export const BOOKING_FLOW = {
-  datePicker: "TODO",
-  courtCell: "TODO",
-  timeSlot: "TODO",
-  addOrContinue: "TODO",
+  openDatePicker: { kind: "role", role: "button", name: "Select a date" } as const,
+  calendarNextMonth: { kind: "title", text: "Next" } as const,
+  /** After choosing month/year, pick day of month (link text is usually `1`–`31` without leading zero). */
+  continueBooking: { kind: "role", role: "button", name: "Continue booking" } as const,
+  /** Terms step — label may be longer; partial match. */
+  termsAccept: { kind: "text", text: /Please tick this box to/i } as const,
+  continueAfterTerms: { kind: "role", role: "button", name: "Continue" } as const,
+  /** Opens the payment step (Stripe Elements card form loads after this). */
+  confirmAndPay: { kind: "role", role: "button", name: "Confirm and pay" } as const,
+};
+
+/** Day cell in the calendar grid (Playwright: `getByRole('link', { name: '25' })`). */
+export function calendarDayLink(dayOfMonth: number): LocatorSpec {
+  return { kind: "role", role: "link", name: String(dayOfMonth) };
+}
+
+/**
+ * Slot row click from codegen used a long `data-test-id`:
+ * `booking-{courtUuid}|YYYY-MM-DD|{slotId}`.
+ * Matching on the session date substring is usually enough; if multiple rows match,
+ * narrow in the adapter (e.g. by court or `.first()` after sorting).
+ */
+export function bookingSlotRow(sessionDate: string): LocatorSpec {
+  return { kind: "css", selector: `[data-test-id*="|${sessionDate}|"]` };
+}
+
+// --- Payment: Stripe Elements (inside iframes) ---
+
+/**
+ * Host-page hints from codegen (optional — use if fills are flaky without a focus click).
+ * Do not store card data in code; adapter fills at runtime only.
+ */
+export const PAYMENT_HOST = {
+  cardNumberLabel: { kind: "text", text: "Card number" } as const,
+  expiryLabel: { kind: "text", text: "MM/YY" } as const,
+  cvcLabel: { kind: "text", text: "CVC" } as const,
+};
+
+/** Accessible names **inside** Stripe iframes — stable across sessions (Stripe-controlled). */
+export const STRIPE_INNER_FIELD = {
+  cardNumber: { role: "textbox" as const, name: "Credit or debit card number" as const },
+  expiry: { role: "textbox" as const, name: "Credit or debit card expiry" as const },
+  cvc: { role: "textbox" as const, name: "Credit or debit card CVC/CVV" as const },
+};
+
+/**
+ * Locate each card iframe without using dynamic names like `__privateStripeFrame7753`
+ * (the numeric suffix changes every page load).
+ *
+ * Wrapper ids follow the pattern seen on the host page (`#cs-stripe-elements-card-cvc` in codegen).
+ * **Verify** `card-number` / `card-expiry` wrapper ids in DevTools; if they differ, update selectors here.
+ *
+ * Adapter pattern:
+ * `page.locator(selector).contentFrame().getByRole(inner.role, { name: inner.name })`
+ * or `page.frameLocator(selector).getByRole(...)`.
+ */
+export const STRIPE_CARD_FRAMES = {
+  cardNumber: {
+    iframe: { kind: "css", selector: "#cs-stripe-elements-card-number iframe" } as const,
+    inner: STRIPE_INNER_FIELD.cardNumber,
+  },
+  expiry: {
+    iframe: { kind: "css", selector: "#cs-stripe-elements-card-expiry iframe" } as const,
+    inner: STRIPE_INNER_FIELD.expiry,
+  },
+  cvc: {
+    iframe: { kind: "css", selector: "#cs-stripe-elements-card-cvc iframe" } as const,
+    inner: STRIPE_INNER_FIELD.cvc,
+  },
 } as const;
 
-// --- Checkout (replace after spike) ---
+/**
+ * Final charge button on Stripe step. Amount varies → match prefix `Pay $`.
+ * Codegen: `getByRole('button', { name: 'Pay $' })`.
+ */
+export const PAYMENT_SUBMIT = {
+  pay: { kind: "role", role: "button", name: /Pay \$/ } as const,
+};
 
+/**
+ * Legacy flat map for docs / adapters that expect `PAYMENT.*` keys.
+ * Card fields are **not** `LocatorSpec` on the root page — use `STRIPE_CARD_FRAMES` + `frameLocator`.
+ */
 export const PAYMENT = {
-  cardNumber: "TODO",
-  expiry: "TODO",
-  cvv: "TODO",
-  nameOnCard: "TODO",
-  postcode: "TODO",
-  submit: "TODO",
+  host: PAYMENT_HOST,
+  stripeFrames: STRIPE_CARD_FRAMES,
+  submit: PAYMENT_SUBMIT.pay,
 } as const;
 
-// --- Post-payment (replace after spike) ---
+/** If the checkout adds name / postcode **outside** the Stripe iframes, codegen again and append here. */
+export const PAYMENT_OUTER_OPTIONAL = {
+  nameOnCard: { kind: "label", text: "REPLACE_IF_PRESENT" },
+  postcode: { kind: "label", text: "REPLACE_IF_PRESENT" },
+} as const;
 
+// --- After pay: booking confirmation page ---
+
+/**
+ * After **Pay**, Clubspark redirects to a URL like:
+ * `/CaberParkTennisCourts/Booking/BookingConfirmation/{bookingId}`.
+ * Do **not** hardcode the UUID — wait for navigation, e.g.
+ * `page.waitForURL(BOOKING_CONFIRMATION.urlPathRegex)` (same origin as booking site).
+ */
+export const BOOKING_CONFIRMATION = {
+  urlPathRegex: /\/CaberParkTennisCourts\/Booking\/BookingConfirmation\/[0-9a-f-]+/i,
+} as const;
+
+/**
+ * Confirmation UI (from codegen). Month and court lines are dynamic — use regex / `confirmationCourtLine`.
+ */
 export const CONFIRMATION = {
-  /** Container or text locator for success */
-  successMarker: "TODO",
-  /** PIN / access code if shown on page */
-  accessCode: "TODO",
+  /**
+   * Primary success heading; accessible name may continue after this phrase
+   * (e.g. “Your booking has been confirmed”).
+   */
+  successHeading: { kind: "role", role: "heading", name: /Your booking has been/i } as const,
+  /**
+   * Month summary heading (codegen: “May 2026”). Matches `Month YYYY` in English.
+   */
+  calendarMonthHeading: { kind: "role", role: "heading", name: /^[A-Za-z]+ \d{4}$/ } as const,
+  /** Section heading above the gate PIN card (“Your pin code”). */
+  yourPinCodeHeading: { kind: "role", role: "heading", name: "Your pin code" } as const,
+  /** Static label above the court line in the PIN card (“Gate Pin code”). */
+  gatePinLabel: { kind: "text", text: "Gate Pin code" } as const,
 } as const;
+
+/**
+ * Locator for the **court + PIN** line on the confirmation page. UI shows one string like `Court 3: 0782`.
+ * Equivalent to `page.getByText('Court 3:')` (substring match); use this with **dynamic** court number.
+ *
+ * Adapter: resolve to `page.getByText(new RegExp(...))` from the returned `LocatorSpec`, then
+ * `innerText()` and {@link parseGatePinFromCourtRow} to store the PIN in the ledger.
+ */
+export function confirmationCourtLine(courtNumber: number): LocatorSpec {
+  return { kind: "text", text: new RegExp(`Court\\s*${courtNumber}\\s*:`, "i") };
+}
+
+/**
+ * Extract digits after `Court n:` from the row text (e.g. `Court 3: 0782` → `0782`).
+ */
+export function parseGatePinFromCourtRow(text: string): string | null {
+  const m = text.trim().match(/Court\s*\d+\s*:\s*(\d+)/i);
+  return m?.[1] ?? null;
+}

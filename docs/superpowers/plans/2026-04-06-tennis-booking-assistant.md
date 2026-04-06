@@ -108,15 +108,17 @@ tennis-booking/
 
 ## Phase 4: Playwright adapter (depends on Phase 0 notes)
 
-- [ ] **Task 6 — Auth + navigate**
+- [x] **Task 6 — Auth + navigate**
   - **Create** `src/adapters/clubspark/auth.ts`: `login(page, username, password)` using **only** selectors from `selectors.ts`.
   - **Create** `src/adapters/clubspark/bookSlot.ts`: given `PlannedJob`, perform UI flow through **slot reserved** or **in basket** state (exact steps from spike doc).
   - Manual run: `tsx src/cli.ts dry-run --date YYYY-MM-DD` opens browser, logs in, stops before pay — verify no secrets logged.
 
-- [ ] **Task 7 — Payment (runtime args only)**
+- [x] **Task 7 — Payment (runtime args only)**
   - **Create** `src/adapters/clubspark/pay.ts`: accept **in-memory** object with card fields; fill form; submit; wait for success selector from spike; return `{ ok, confirmationText }`.
   - **Never** write card fields to disk; clear object after use in runner.
   - **Commit:** `feat(clubspark): checkout automation`.
+
+Also added: `locator.ts`, `confirmation.ts` (gate PIN), CLI `dry-run`.
 
 ---
 

@@ -33,6 +33,8 @@ Local helper for multi-account Clubspark (Caber Park) booking.
 | `npm run build` | TypeScript build |
 | `npm run cli -- config check` | Validate `config/accounts.local.json` (or `TENNIS_BOOKING_ACCOUNTS`); prints **label, id, username** only — never passwords |
 | `npm run cli -- config check --config /path/to/file.json` | Validate a specific accounts file |
+| `npm run cli -- dry-run --date 2026-05-25` | Headed browser: sign in (first account), select date, add **Court 1** 07:30 slot through basket — **no payment**; pauses for inspection |
+| `npm run cli -- dry-run --date 2026-05-25 --headless` | Same flow headless; short wait then exit |
 
 ## Design
 
