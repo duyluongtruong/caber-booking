@@ -124,10 +124,12 @@ Also added: `locator.ts`, `confirmation.ts` (gate PIN), CLI `dry-run`.
 
 ## Phase 5: Runner + CLI `run`
 
-- [ ] **Task 8 — Runner**
+- [x] **Task 8 — Runner**
   - **Create** `src/runner/runSession.ts`: load accounts + plan jobs; for each job: login → book → pay; on success append/update ledger (parse PIN from confirmation if present); on failure apply **abort** policy (default: stop run after first payment failure).
   - **Create** `src/cli.ts` subcommand `run --date ...` prompting for payment fields (use `readline` or `@inquirer/prompts` — mask CVV input).
   - **Commit:** `feat(runner): end-to-end session`.
+
+_Also:_ `sessionDate.ts` (`--weeks`), `mondayPlan.ts`, `prompts/readCard.ts`, `dry-run` uses full 3-court plan (browser still exercises job 1 only).
 
 ---
 
