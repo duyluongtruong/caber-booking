@@ -1,0 +1,16 @@
+{
+  "name": "tennis-booking",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Local helper for multi-account Clubspark (Caber Park) court booking",
+  "type": "module",
+  "scripts": {
+    "codegen": "playwright codegen \"https://play.tennis.com.au/CaberParkTennisCourts/Booking/BookByDate#?role=guest\""
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.51.0",
+    "playwright": "^1.51.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}

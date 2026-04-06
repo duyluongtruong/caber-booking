@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Local secrets — never commit
+config/accounts.local.json
+.env
+.env.local
+*.pem
+
+# Ledger / runtime data
+data/
+*.db
+
+# Playwright
+playwright-report/
+test-results/
+blob-report/
+playwright/.cache/
+
+# Build / OS
+dist/
+.DS_Store
+*.log
