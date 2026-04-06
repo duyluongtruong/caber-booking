@@ -5,6 +5,9 @@
   "description": "Local helper for multi-account Clubspark (Caber Park) court booking",
   "type": "module",
   "scripts": {
+    "build": "tsc",
+    "test": "node --test --import tsx tests/**/*.test.ts",
+    "cli": "tsx src/cli.ts",
     "codegen": "playwright codegen \"https://play.tennis.com.au/CaberParkTennisCourts/Booking/BookByDate#?role=guest\""
   },
   "devDependencies": {

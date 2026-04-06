@@ -63,12 +63,14 @@ tennis-booking/
 
 ## Phase 1: Project scaffold + planner (testable, no browser)
 
-- [ ] **Task 1 — TypeScript scaffold**
+**Subagent parallelization:** Task 2 cannot start until `package.json` + `tsconfig` expose `npm test` (Task 1). For **future** phases, split by **file ownership** (e.g. Phase 2: one agent `loadConfig` + fixtures, another `ledger/types` + empty store) after shared types are merged.
+
+- [x] **Task 1 — TypeScript scaffold**
   - Add `tsconfig.json` (`"strict": true`, `outDir": "dist"`, `rootDir": "src"`).
   - Add `package.json` scripts: `"build": "tsc"`, `"test": "node --test --import tsx"`, `"cli": "tsx src/cli.ts"`.
   - **Commit:** `chore: init ts project`.
 
-- [ ] **Task 2 — Planner module**
+- [x] **Task 2 — Planner module**
   - **Create** `src/planner/types.ts`: `BookingAccount`, `TimeWindow`, `PlannedJob` (accountId, courtLabel, start, end, sequence).
   - **Create** `src/planner/planJobs.ts`: function `planJobs(accounts, template) => PlannedJob[]` enforcing **≤2 jobs per account per day** and **≤2h per job**; court count = 3; **template** encodes how 07:30–10:00 splits into bookable blocks (adjust after spike if UI forces a different split).
   - **Create** `tests/planner.test.ts`: assert throws if fewer than 3 courts worth of capacity; assert each account has ≤2 jobs; assert no overlapping jobs for same account.
