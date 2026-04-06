@@ -98,7 +98,7 @@ tennis-booking/
 
 ## Phase 3: Ledger (court × time × access code)
 
-- [ ] **Task 5 — Ledger store**
+- [x] **Task 5 — Ledger store**
   - **Create** `src/ledger/types.ts`: `LedgerRow` (sessionDate, courtLabel, start, end, accountId, accessCode?, status, bookingRef?, jobSequence).
   - **Create** `src/ledger/store.ts`: upsert from `PlannedJob` after plan; update code/status; `exportMarkdown(sessionDate)`.
   - **Create** `tests/ledger.test.ts`: create rows for 3 courts; manual set code; export contains codes.
@@ -151,7 +151,7 @@ tennis-booking/
 | §5.3 Manual run + payment prompt | Phase 5 |
 | §5.4 Execution | Phases 4–5 |
 | §5.5 Reporting | Phase 5 (console) + 6 |
-| §5.6 Access code ledger | Phase 3 + 5 |
+| §5.6 Access code ledger | Phase 3 (store) + 5 (runner wiring) |
 | §7 Security (no account encryption; payment still ephemeral) | Phases 2, 4, 5, 6 |
 
 ---

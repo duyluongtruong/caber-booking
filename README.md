@@ -18,6 +18,7 @@ Local helper for multi-account Clubspark (Caber Park) booking.
 ### Environment
 
 - **`TENNIS_BOOKING_ACCOUNTS`** (optional): path to the accounts JSON file. If unset, the default is `config/accounts.local.json`.
+- **`TENNIS_BOOKING_LEDGER`** (optional): path to the PIN / session ledger JSON. Default: `data/ledger.json` (gitignored under `data/`).
 
 ## Security
 
