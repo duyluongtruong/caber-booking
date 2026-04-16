@@ -22,6 +22,31 @@ export type TemplateSlot = {
   end: string;
 };
 
+/** How an ad hoc booking run should execute (runner uses this in later tasks). */
+export type AdHocBookingMode = "real" | "dry-run";
+
+/** Single-court ad hoc input; template builder turns [start,end] into one or more slots. */
+export type AdHocBookingRequest = {
+  sessionDate: string;
+  courtIndex: number;
+  courtLabel: string;
+  start: string;
+  end: string;
+  mode: AdHocBookingMode;
+  /** If set, planning may pin jobs to this account in a later task. */
+  accountIdOverride?: string;
+  /** Each generated slot is at most this many hours (default 2). */
+  maxHoursPerBooking?: number;
+};
+
+/** Optional constraints for {@link planJobs}. */
+export type PlanJobsOptions = {
+  /** When set, planning uses only this account; fails if it cannot satisfy all slots. */
+  accountId?: string;
+  /** Minimum distinct courts required in template (default 3 for Monday sessions, 1 for ad-hoc). */
+  minCourts?: number;
+};
+
 /** Describes how Monday (or any) session is split into ≤2h Clubspark bookings. */
 export type SessionTemplate = {
   /** ISO date `YYYY-MM-DD` for the session being booked. */

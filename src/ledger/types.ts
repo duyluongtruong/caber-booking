@@ -1,4 +1,4 @@
-export type LedgerStatus = "pending_pin" | "confirmed" | "manual_override" | "failed";
+export type LedgerStatus = "not_started" | "pending_pin" | "confirmed" | "manual_override" | "failed";
 
 /** One planned or completed booking row (court × time × account × optional gate PIN). */
 export type LedgerRow = {

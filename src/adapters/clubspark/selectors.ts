@@ -10,6 +10,9 @@
 export const CABER_PARK_BOOKING_BASE =
   "https://play.tennis.com.au/CaberParkTennisCourts/Booking/BookByDate";
 
+export const CABER_PARK_MANAGE_BOOKINGS =
+  "https://play.tennis.com.au/CaberParkTennisCourts/Booking/Bookings";
+
 /** Build booking URL with optional date (YYYY-MM-DD) and role. */
 export function bookingUrl(opts?: { date?: string; role?: "guest" | "member" }) {
   const params = new URLSearchParams();
@@ -59,9 +62,12 @@ export const BOOKING_FLOW = {
   /** Terms step — label may be longer; partial match. */
   termsAccept: { kind: "text", text: /Please tick this box to/i } as const,
   continueAfterTerms: { kind: "role", role: "button", name: "Continue" } as const,
-  /** Opens the payment step (Stripe Elements card form loads after this). */
+  /** Opens Stripe (`payWithCard`). Prefer `#paynow` in adapter when present — Caber Park uses that id + `data-stripe-payment`. */
   confirmAndPay: { kind: "role", role: "button", name: "Confirm and pay" } as const,
 };
+
+/** Basket → Stripe: stable id on Clubspark checkout (text still “Confirm and pay”). */
+export const STRIPE_PAY_NOW = "#paynow";
 
 /** Day cell in the calendar grid (Playwright: `getByRole('link', { name: '25' })`). */
 export function calendarDayLink(dayOfMonth: number): LocatorSpec {
@@ -69,10 +75,9 @@ export function calendarDayLink(dayOfMonth: number): LocatorSpec {
 }
 
 /**
- * Slot row click from codegen used a long `data-test-id`:
- * `booking-{courtUuid}|YYYY-MM-DD|{slotId}`.
- * Matching on the session date substring is usually enough; if multiple rows match,
- * narrow in the adapter (e.g. by court or `.first()` after sorting).
+ * Grid anchor `data-test-id`:
+ * `booking-{resourceUuid}|YYYY-MM-DD|{minutesSinceMidnight}` (30-minute steps). Bookable cells:
+ * `a.book-interval.not-booked` (link text is usually price, not times). Booked: `a.edit-booking`.
  */
 export function bookingSlotRow(sessionDate: string): LocatorSpec {
   return { kind: "css", selector: `[data-test-id*="|${sessionDate}|"]` };
@@ -110,15 +115,15 @@ export const STRIPE_INNER_FIELD = {
  */
 export const STRIPE_CARD_FRAMES = {
   cardNumber: {
-    iframe: { kind: "css", selector: "#cs-stripe-elements-card-number iframe" } as const,
+    iframe: { kind: "css", selector: '#cs-stripe-elements-card-number iframe[allow="payment *"]' } as const,
     inner: STRIPE_INNER_FIELD.cardNumber,
   },
   expiry: {
-    iframe: { kind: "css", selector: "#cs-stripe-elements-card-expiry iframe" } as const,
+    iframe: { kind: "css", selector: '#cs-stripe-elements-card-expiry iframe[allow="payment *"]' } as const,
     inner: STRIPE_INNER_FIELD.expiry,
   },
   cvc: {
-    iframe: { kind: "css", selector: "#cs-stripe-elements-card-cvc iframe" } as const,
+    iframe: { kind: "css", selector: '#cs-stripe-elements-card-cvc iframe[allow="payment *"]' } as const,
     inner: STRIPE_INNER_FIELD.cvc,
   },
 } as const;

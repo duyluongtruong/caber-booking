@@ -5,11 +5,38 @@ import type { BookingAccount, SessionTemplate } from "../src/planner/types.ts";
 
 const courts = ["Court 1", "Court 2", "Court 3"] as [string, string, string];
 
-test("throws when fewer than 3 distinct courts in template", () => {
+test("one-court template with a single slot plans successfully", () => {
+  const accounts: BookingAccount[] = [{ id: "a", label: "A" }];
+  const template: SessionTemplate = {
+    sessionDate: "2026-05-25",
+    slots: [{ courtIndex: 0, courtLabel: "Court 1", start: "07:30", end: "09:30" }],
+    maxHoursPerBooking: 2,
+  };
+  const jobs = planJobs(accounts, template);
+  assert.equal(jobs.length, 1);
+  assert.equal(jobs[0].accountId, "a");
+  assert.equal(jobs[0].courtLabel, "Court 1");
+});
+
+test("one-court template with two non-overlapping slots can use one account", () => {
+  const accounts: BookingAccount[] = [{ id: "a", label: "A" }];
+  const template: SessionTemplate = {
+    sessionDate: "2026-05-25",
+    slots: [
+      { courtIndex: 0, courtLabel: "Court 1", start: "07:30", end: "09:30" },
+      { courtIndex: 0, courtLabel: "Court 1", start: "09:30", end: "11:30" },
+    ],
+    maxHoursPerBooking: 2,
+  };
+  const jobs = planJobs(accounts, template);
+  assert.equal(jobs.length, 2);
+  assert.ok(jobs.every((j) => j.accountId === "a"));
+});
+
+test("two-court simultaneous slots require two accounts (overlap)", () => {
   const accounts: BookingAccount[] = [
     { id: "a", label: "A" },
     { id: "b", label: "B" },
-    { id: "c", label: "C" },
   ];
   const template: SessionTemplate = {
     sessionDate: "2026-05-25",
@@ -19,7 +46,67 @@ test("throws when fewer than 3 distinct courts in template", () => {
     ],
     maxHoursPerBooking: 2,
   };
-  assert.throws(() => planJobs(accounts, template), /at least 3 distinct courts/);
+  const jobs = planJobs(accounts, template);
+  assert.equal(jobs.length, 2);
+  assert.notEqual(jobs[0].accountId, jobs[1].accountId);
+});
+
+test("accountId override assigns all slots to that account when within limits", () => {
+  const accounts: BookingAccount[] = [
+    { id: "a", label: "A" },
+    { id: "b", label: "B" },
+  ];
+  const template: SessionTemplate = {
+    sessionDate: "2026-05-25",
+    slots: [{ courtIndex: 0, courtLabel: "Court 1", start: "07:30", end: "09:30" }],
+    maxHoursPerBooking: 2,
+  };
+  const jobs = planJobs(accounts, template, { accountId: "b" });
+  assert.equal(jobs.length, 1);
+  assert.equal(jobs[0].accountId, "b");
+});
+
+test("accountId override rejects empty-string account id", () => {
+  const accounts: BookingAccount[] = [{ id: "a", label: "A" }];
+  const template: SessionTemplate = {
+    sessionDate: "2026-05-25",
+    slots: [{ courtIndex: 0, courtLabel: "Court 1", start: "07:30", end: "09:30" }],
+    maxHoursPerBooking: 2,
+  };
+  assert.throws(
+    () => planJobs(accounts, template, { accountId: "" }),
+    /accountId override must not be empty/,
+  );
+});
+
+test("accountId override fails when account id is unknown", () => {
+  const accounts: BookingAccount[] = [{ id: "a", label: "A" }];
+  const template: SessionTemplate = {
+    sessionDate: "2026-05-25",
+    slots: [{ courtIndex: 0, courtLabel: "Court 1", start: "07:30", end: "09:30" }],
+    maxHoursPerBooking: 2,
+  };
+  assert.throws(() => planJobs(accounts, template, { accountId: "missing" }), /Unknown booking account id/);
+});
+
+test("accountId override fails when account is inactive", () => {
+  const accounts: BookingAccount[] = [{ id: "a", label: "A", active: false }];
+  const template: SessionTemplate = {
+    sessionDate: "2026-05-25",
+    slots: [{ courtIndex: 0, courtLabel: "Court 1", start: "07:30", end: "09:30" }],
+    maxHoursPerBooking: 2,
+  };
+  assert.throws(() => planJobs(accounts, template, { accountId: "a" }), /not active/);
+});
+
+test("accountId override fails clearly when slots cannot fit that account", () => {
+  const accounts: BookingAccount[] = [{ id: "a", label: "A", maxBookingsPerDay: 2 }];
+  const base = defaultThreeCourtMondaySlots(courts);
+  const template: SessionTemplate = { ...base, sessionDate: "2026-05-25" };
+  assert.throws(
+    () => planJobs(accounts, template, { accountId: "a" }),
+    /Cannot assign all slots to account/,
+  );
 });
 
 test("throws when not enough account capacity for 6 slots (max 2 per account)", () => {

@@ -1,16 +1,14 @@
-import type { BookingAccount, PlannedJob, SessionTemplate, TemplateSlot } from "./types.js";
+import { timeToMinutes } from "./time.js";
+import type {
+  BookingAccount,
+  PlannedJob,
+  PlanJobsOptions,
+  SessionTemplate,
+  TemplateSlot,
+} from "./types.js";
 
 const DEFAULT_MAX_BOOKINGS = 2;
 const DEFAULT_MAX_HOURS = 2;
-
-function timeToMinutes(t: string): number {
-  const m = /^(\d{1,2}):(\d{2})$/.exec(t.trim());
-  if (!m) throw new Error(`Invalid time (expected HH:mm): ${t}`);
-  const h = Number(m[1]);
-  const min = Number(m[2]);
-  if (h > 23 || min > 59) throw new Error(`Invalid time: ${t}`);
-  return h * 60 + min;
-}
 
 function slotDurationHours(slot: TemplateSlot): number {
   const a = timeToMinutes(slot.start);
@@ -32,12 +30,29 @@ function overlaps(a: TemplateSlot, b: TemplateSlot): boolean {
  * no time-overlapping slots on the same account, each slot duration ≤ `maxHoursPerBooking`.
  * Deterministic: accounts sorted by `id`, slots sorted by start then courtIndex.
  */
-export function planJobs(accounts: BookingAccount[], template: SessionTemplate): PlannedJob[] {
+export function planJobs(accounts: BookingAccount[], template: SessionTemplate, opts?: PlanJobsOptions): PlannedJob[] {
   const maxHours = template.maxHoursPerBooking ?? DEFAULT_MAX_HOURS;
 
-  const active = accounts
+  let active = accounts
     .filter((a) => a.active !== false)
     .sort((x, y) => x.id.localeCompare(y.id));
+
+  if (opts?.accountId !== undefined) {
+    if (opts.accountId === "") {
+      throw new Error("accountId override must not be empty");
+    }
+    const match = active.find((a) => a.id === opts.accountId);
+    if (!match) {
+      const exists = accounts.some((a) => a.id === opts.accountId);
+      throw new Error(
+        exists
+          ? `Account "${opts.accountId}" is not active`
+          : `Unknown booking account id "${opts.accountId}"`,
+      );
+    }
+    active = [match];
+  }
+
   if (active.length === 0) throw new Error("No active accounts");
 
   const slots = [...template.slots].sort((s, t) => {
@@ -54,9 +69,11 @@ export function planJobs(accounts: BookingAccount[], template: SessionTemplate):
     }
   }
 
-  const courtLabels = new Set(slots.map((s) => s.courtLabel));
-  if (courtLabels.size < 3) {
-    throw new Error(`Need at least 3 distinct courts in template; got ${courtLabels.size}`);
+  if (opts?.minCourts !== undefined) {
+    const courtLabels = new Set(slots.map((s) => s.courtLabel));
+    if (courtLabels.size < opts.minCourts) {
+      throw new Error(`Need at least ${opts.minCourts} distinct courts in template; got ${courtLabels.size}`);
+    }
   }
 
   type Assigned = { slot: TemplateSlot; accountId: string };
@@ -75,7 +92,9 @@ export function planJobs(accounts: BookingAccount[], template: SessionTemplate):
     }
     if (!picked) {
       throw new Error(
-        "Not enough account capacity or overlapping limits: cannot assign all slots",
+        opts?.accountId
+          ? `Cannot assign all slots to account "${opts.accountId}"`
+          : "Not enough account capacity or overlapping limits: cannot assign all slots",
       );
     }
     assigned.push({ slot, accountId: picked.id });
@@ -91,7 +110,10 @@ export function planJobs(accounts: BookingAccount[], template: SessionTemplate):
   }));
 }
 
-/** Default Caber-style split: 3 courts, 07:30–09:30 (2h) + 09:30–10:00 on each (0.5h second booking). */
+/**
+ * Default Caber Monday **evening** session: 3 courts, **19:30–21:30** (2h) + **21:30–22:00** each.
+ * Times are **24-hour** (`19:30` = 7:30 PM). Older values `07:30` were 7:30 **AM**, not evening.
+ */
 export function defaultThreeCourtMondaySlots(
   courtLabels: [string, string, string],
 ): Omit<SessionTemplate, "sessionDate"> {
@@ -100,14 +122,14 @@ export function defaultThreeCourtMondaySlots(
     blocks.push({
       courtIndex: i,
       courtLabel: courtLabels[i],
-      start: "07:30",
-      end: "09:30",
+      start: "19:30",
+      end: "21:30",
     });
     blocks.push({
       courtIndex: i,
       courtLabel: courtLabels[i],
-      start: "09:30",
-      end: "10:00",
+      start: "21:30",
+      end: "22:00",
     });
   }
   return { slots: blocks, maxHoursPerBooking: 2 };

@@ -8,7 +8,7 @@
 
 ## 1. Purpose
 
-Build a **locally operated tool** that helps a regular group (~16–17 players) reserve **three courts** for a **Monday** session (default **07:30–10:00** local time), under Clubspark’s updated limits:
+Build a **locally operated tool** that helps a regular group (~16–17 players) reserve **three courts** for a **Monday evening** session (default **19:30–22:00** local time, 24-hour clock), under Clubspark’s updated limits:
 
 - Book up to **28 days** in advance  
 - **Maximum 2 bookings per day** per account  

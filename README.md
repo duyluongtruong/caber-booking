@@ -15,7 +15,7 @@ Local helper for multi-account Clubspark (Caber Park) booking.
 
 `config/accounts.local.json` is listed in `.gitignore` and must not be committed.
 
-You need **at least three active accounts** in config: Monday evening is planned as **six** separate bookings (Courts **1–3**, **07:30–09:30** and **09:30–10:00** each), two per account max.
+You need **at least three active accounts** in config: Monday evening is planned as **six** separate bookings (Courts **1–3**, **19:30–21:30** and **21:30–22:00** each, 24-hour times), two per account max.
 
 ### Environment
 

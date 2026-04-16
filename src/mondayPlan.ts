@@ -5,7 +5,7 @@ import { defaultThreeCourtMondaySlots } from "./planner/planJobs.js";
 export const DEFAULT_COURT_LABELS = ["Court 1", "Court 2", "Court 3"] as const;
 
 /**
- * Monday 19:30–22:00 group session: three courts, 07:30–09:30 + 09:30–10:00 per court (≤2h per booking).
+ * Monday **evening** 19:30–22:00: three courts, 19:30–21:30 + 21:30–22:00 per court (≤2h per booking).
  */
 export function buildMondayThreeCourtTemplate(sessionDate: string): SessionTemplate {
   return {
