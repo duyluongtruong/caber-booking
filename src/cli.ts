@@ -22,7 +22,7 @@ import {
   runAdHocBookingSession,
   runBookingSession,
 } from "./runner/runSession.js";
-import { readCardFromStdin } from "./prompts/readCard.js";
+import { getCardInput } from "./prompts/readCard.js";
 import {
   bookOneRequestedSpanExceedsTwoHours,
   planBookOneJobs,
@@ -193,11 +193,11 @@ program
       return;
     }
 
-    console.error(`run: session ${sessionDate} — you will be prompted for card details (not logged).`);
+    console.error(`run: session ${sessionDate} — card details will be loaded from config/card.local.json if present, else prompted (not logged).`);
 
     let card;
     try {
-      card = await readCardFromStdin();
+      card = await getCardInput();
     } catch (e) {
       console.error("tennis-booking:", e instanceof Error ? e.message : e);
       process.exitCode = 1;
@@ -303,7 +303,7 @@ program
       }
 
       console.error(
-        "book-one: card details are requested only when the first job reaches payment (not logged).",
+        "book-one: card details loaded from config/card.local.json if present, else prompted when the first job reaches payment (not logged).",
       );
 
       try {
@@ -311,7 +311,7 @@ program
           configPath,
           jobs,
           headless: opts.headless,
-          getCardWhenNeeded: readCardFromStdin,
+          getCardWhenNeeded: getCardInput,
         });
       } catch (e) {
         console.error("tennis-booking: book-one failed:", e instanceof Error ? e.message : e);

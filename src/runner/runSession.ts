@@ -1,3 +1,4 @@
+import { setTimeout as sleep } from "node:timers/promises";
 import { chromium, type Browser } from "playwright";
 import { loadConfig, type ConfigAccount, type LoadedConfig } from "../loadConfig.js";
 import { planJobs } from "../planner/planJobs.js";

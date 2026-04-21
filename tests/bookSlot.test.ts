@@ -1,11 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildBookingTestId,
   buildPlannedStartTimePattern,
   minutesSinceMidnightToHHmm,
+  resolveCourtResource,
   resolveOverlayEndMinutes,
   rowTextMatchesPlannedSlot,
   wallTimeToMinutesSinceMidnight,
+  type CourtResource,
 } from "../src/adapters/clubspark/bookSlot.ts";
 
 test("minutesSinceMidnightToHHmm formats Select2 labels", () => {
@@ -62,4 +65,45 @@ test("rowTextMatchesPlannedSlot for 21:30–22:00 block", () => {
   const job = { start: "21:30", end: "22:00" };
   assert.equal(rowTextMatchesPlannedSlot("19:30 - 21:30", job), false);
   assert.equal(rowTextMatchesPlannedSlot("21:30 - 22:00", job), true);
+});
+
+test("buildBookingTestId composes the exact Clubspark data-test-id", () => {
+  assert.equal(
+    buildBookingTestId("f933bbe7-ef18-46bd-a274-debad6e12350", "2026-04-27", 1140),
+    "booking-f933bbe7-ef18-46bd-a274-debad6e12350|2026-04-27|1140",
+  );
+  assert.equal(
+    buildBookingTestId("16a3e29f-07b6-4d98-ba53-5c9fcff71808", "2026-04-27", 480),
+    "booking-16a3e29f-07b6-4d98-ba53-5c9fcff71808|2026-04-27|480",
+  );
+});
+
+test("resolveCourtResource returns the matching court by label", () => {
+  const resources = new Map<string, CourtResource>([
+    ["Court 1", { name: "Court 1", resourceId: "id-1", position: 0 }],
+    ["Court 2", { name: "Court 2", resourceId: "id-2", position: 1 }],
+  ]);
+  assert.equal(resolveCourtResource(resources, "Court 2").resourceId, "id-2");
+});
+
+test("resolveCourtResource throws with available court names when label missing", () => {
+  const resources = new Map<string, CourtResource>([
+    ["Court 1", { name: "Court 1", resourceId: "id-1", position: 0 }],
+    ["Court 3", { name: "Court 3", resourceId: "id-3", position: 2 }],
+  ]);
+  assert.throws(
+    () => resolveCourtResource(resources, "Court 2"),
+    /no court labelled "Court 2"/i,
+  );
+  assert.throws(
+    () => resolveCourtResource(resources, "Court 2"),
+    /Court 1, Court 3/,
+  );
+});
+
+test("resolveCourtResource reports empty map with clear message", () => {
+  assert.throws(
+    () => resolveCourtResource(new Map(), "Court 1"),
+    /none discovered/,
+  );
 });

@@ -1,37 +1,62 @@
 import type { Page } from "playwright";
 import type { PlannedJob } from "../../planner/types.js";
-import { CABER_PARK_MANAGE_BOOKINGS } from "./selectors.js";
-
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-function formatDateForBookingMatch(sessionDate: string): string {
-  const [year, month, day] = sessionDate.split("-");
-  return `${parseInt(day)} ${MONTHS[parseInt(month) - 1]} ${year}`;
-}
+import { BOOKING_CONFIRMATION, extractCourtPinFromText } from "./selectors.js";
+import { courtNumberFromLabel } from "./bookSlot.js";
 
 /**
- * Read gate PIN by navigating to the manage-bookings page, finding the panel
- * that matches this job's date/time/court, clicking "View details", and
- * extracting the PIN from the booking detail page.
+ * Read the gate PIN from the **current** `/Booking/BookingConfirmation/{bookingId}` page.
+ *
+ * Confirmation PIN DOM (one `<li>` per court booked):
+ * ```
+ * <div class="pin-code-item-container">
+ *   <h4>Gate Pin code</h4>
+ *   <ul><li>Court 1: 0782</li></ul>
+ * </div>
+ * ```
+ * Reads the card's full `innerText` and regex-extracts the court's row —
+ * avoids Playwright's inconsistent regex handling in `filter({ hasText })`.
+ *
+ * Emits `pin:` prefixed diagnostic lines to `console.error` so an operator can see exactly which
+ * step failed (URL mismatch, card not visible, wrong court, etc.) without re-running with a debugger.
  */
 export async function readGatePinForJob(page: Page, job: PlannedJob): Promise<string | null> {
-  await page.goto(CABER_PARK_MANAGE_BOOKINGS);
-  await page.locator(".js-my-bookings-container").waitFor({ state: "visible", timeout: 30_000 });
+  const courtNum = courtNumberFromLabel(job.courtLabel);
+  const url = page.url();
+  console.error(`pin: url=${url}`);
+  console.error(`pin: looking for Court ${courtNum} (job.courtLabel="${job.courtLabel}")`);
 
-  const dateStr = formatDateForBookingMatch(job.sessionDate);
-  const timePattern = new RegExp(`${dateStr}.*${job.start}\\s*-\\s*${job.end}`);
-  const panel = page
-    .locator(".block-panel")
-    .filter({ hasText: timePattern })
-    .filter({ hasText: job.courtLabel });
+  if (!BOOKING_CONFIRMATION.urlPathRegex.test(url)) {
+    console.error(`pin: URL does not match confirmation pattern — waiting up to 15s`);
+    try {
+      await page.waitForURL(BOOKING_CONFIRMATION.urlPathRegex, { timeout: 15_000 });
+      console.error(`pin: URL settled to ${page.url()}`);
+    } catch {
+      console.error(`pin: URL never matched; continuing anyway with ${page.url()}`);
+    }
+  }
 
-  if ((await panel.count()) === 0) return null;
+  const card = page.locator(".pin-code-item-container").first();
+  const cardCount = await page.locator(".pin-code-item-container").count();
+  console.error(`pin: .pin-code-item-container count=${cardCount}`);
 
-  await panel.locator("a.cs-btn.tertiary.sm").first().click();
+  try {
+    await card.waitFor({ state: "visible", timeout: 20_000 });
+    console.error(`pin: card is visible`);
+  } catch {
+    console.error(`pin: card never became visible within 20s`);
+    const bodyTextSample = await page.locator("body").innerText().catch(() => "");
+    console.error(`pin: body innerText (first 500 chars): ${bodyTextSample.slice(0, 500).replace(/\n/g, " | ")}`);
+    return null;
+  }
 
-  await page.locator(".js-resource-pins-container").waitFor({ state: "visible", timeout: 15_000 });
-  const pinEl = page.locator(".js-resource-pins-container .value").first();
-  if ((await pinEl.count()) === 0) return null;
-  const text = await pinEl.innerText();
-  return text.trim() || null;
+  const cardText = await card.innerText();
+  console.error(`pin: card innerText (raw): ${JSON.stringify(cardText)}`);
+
+  const extracted = extractCourtPinFromText(cardText, courtNum);
+  if (extracted) {
+    console.error(`pin: extracted PIN for Court ${courtNum}: ${extracted}`);
+  } else {
+    console.error(`pin: regex did not match — no PIN for Court ${courtNum} in card text`);
+  }
+  return extracted;
 }

@@ -196,8 +196,22 @@ export function confirmationCourtLine(courtNumber: number): LocatorSpec {
 
 /**
  * Extract digits after `Court n:` from the row text (e.g. `Court 3: 0782` → `0782`).
+ * Matches **any** `Court N:` row — use {@link extractCourtPinFromText} when the text may
+ * contain multiple court lines and you need a specific one.
  */
 export function parseGatePinFromCourtRow(text: string): string | null {
   const m = text.trim().match(/Court\s*\d+\s*:\s*(\d+)/i);
+  return m?.[1] ?? null;
+}
+
+/**
+ * Extract the gate PIN for a specific court number from a block of confirmation-page text
+ * (typically the full `innerText` of `.pin-code-item-container`). The `\b` word boundary
+ * and post-number lookahead prevent `Court 1` from matching inside `Court 10`/`Court 11`
+ * when the basket contains multiple courts.
+ */
+export function extractCourtPinFromText(text: string, courtNumber: number): string | null {
+  const pattern = new RegExp(`\\bCourt\\s*${courtNumber}\\s*:\\s*(\\d+)`, "i");
+  const m = text.match(pattern);
   return m?.[1] ?? null;
 }

@@ -155,6 +155,85 @@ export function courtNumberFromLabel(courtLabel: string): number {
   return Number(m[1]);
 }
 
+/**
+ * One court (resource) in the Clubspark grid.
+ *
+ * Clubspark renders each court column as `<div class="resource" data-resource-name="Court N"
+ * data-resource-id="{guid}" data-resource-position="{0-based}" data-resource-group-id="{guid}">`.
+ * `resourceId` is the stable GUID that appears as the prefix in each anchor's `data-test-id`
+ * (`booking-{resourceId}|{YYYY-MM-DD}|{minutesSinceMidnight}`) — use it to identify the court
+ * instead of positional DOM order, which collapses when some courts are booked.
+ */
+export type CourtResource = {
+  name: string;
+  resourceId: string;
+  position: number;
+  groupId?: string;
+};
+
+/** Lookup by `data-resource-name` (e.g. `"Court 2"`). */
+export type CourtResourceMap = Map<string, CourtResource>;
+
+/** Exact `data-test-id` for a bookable 30-min anchor on a specific court. */
+export function buildBookingTestId(
+  resourceId: string,
+  sessionDate: string,
+  startMinutes: number,
+): string {
+  return `booking-${resourceId}|${sessionDate}|${startMinutes}`;
+}
+
+/**
+ * Resolve `job.courtLabel` ("Court 2") against a discovered resource map; throw a clear error
+ * listing the available court labels when the venue has no such court (misconfigured CLI /
+ * rename / different venue).
+ */
+export function resolveCourtResource(
+  resources: CourtResourceMap,
+  courtLabel: string,
+): CourtResource {
+  const r = resources.get(courtLabel);
+  if (r) return r;
+  const available = [...resources.keys()];
+  const list = available.length > 0 ? available.join(", ") : "(none discovered)";
+  throw new Error(
+    `Venue has no court labelled "${courtLabel}". Available: ${list}.`,
+  );
+}
+
+/**
+ * Discover court → resource-id mapping from the booking grid. Must be called **after**
+ * `pickSessionDateInCalendar` so `.resource[data-resource-id]` columns are rendered.
+ * Returns a `Map` keyed by `data-resource-name` (e.g. `"Court 2"`).
+ */
+export async function discoverCourtResources(page: Page): Promise<CourtResourceMap> {
+  const entries = await page
+    .locator(".resource[data-resource-id][data-resource-name]")
+    .evaluateAll((els) =>
+      els.map((el) => {
+        const e = el as HTMLElement;
+        return {
+          name: e.dataset.resourceName ?? "",
+          resourceId: e.dataset.resourceId ?? "",
+          position: Number(e.dataset.resourcePosition ?? "0"),
+          groupId: e.dataset.resourceGroupId,
+        };
+      }),
+    );
+  const byName: CourtResourceMap = new Map();
+  for (const r of entries) {
+    if (r.name && r.resourceId) {
+      byName.set(r.name, {
+        name: r.name,
+        resourceId: r.resourceId,
+        position: r.position,
+        groupId: r.groupId,
+      });
+    }
+  }
+  return byName;
+}
+
 export type GotoBookingOptions = { role?: "guest" | "member" };
 
 /**
@@ -247,27 +326,46 @@ export function rowTextMatchesPlannedSlot(text: string, job: Pick<PlannedJob, "s
 }
 
 /**
- * Click the **bookable** 30-minute cell at `job.start`. Bookable anchors use
- * `a.book-interval.not-booked` and `data-test-id*="|{sessionDate}|{minutes}"`; link text is usually
- * a price, not clock times. Courts share the same minute suffix; DOM order is Court 1, 2, 3.
+ * Click the **bookable** 30-minute cell at `job.start` on the requested court.
+ *
+ * Clubspark `data-test-id` format: `booking-{resourceId}|{YYYY-MM-DD}|{minutesSinceMidnight}`.
+ * Positional DOM matching (`nth(courtIndex-1)`) is unsafe because booked 30-min cells emit no
+ * anchor at all — the bookable-only list collapses indices, and you can end up booking the wrong
+ * court (or throwing when the court you want is the only one still free). Instead we resolve the
+ * court via its stable `data-resource-id` GUID (discovered from `.resource` columns) and match
+ * `data-test-id` exactly. If `resources` is omitted we discover them on the fly.
  */
-export async function clickSlotForPlannedJob(page: Page, job: PlannedJob): Promise<void> {
+export async function clickSlotForPlannedJob(
+  page: Page,
+  job: PlannedJob,
+  resources?: CourtResourceMap,
+): Promise<void> {
+  const map = resources ?? (await discoverCourtResources(page));
+  if (map.size === 0) {
+    throw new Error(
+      "Booking grid has no `.resource[data-resource-id]` columns — grid did not render, venue changed, or selectors need updating.",
+    );
+  }
+  const resource = resolveCourtResource(map, job.courtLabel);
   const startMins = wallTimeToMinutesSinceMidnight(job.start);
-  const suffix = `|${job.sessionDate}|${startMins}`;
-  const courtIdx = courtNumberFromLabel(job.courtLabel) - 1;
-  const cells = page.locator(`a.book-interval.not-booked[data-test-id*="${suffix}"]`);
-  const n = await cells.count();
-  if (n === 0) {
-    throw new Error(
-      `No bookable cell at ${job.start} (${startMins}m) on ${job.sessionDate} — interval missing or not \`book-interval not-booked\`.`,
-    );
+  const testId = buildBookingTestId(resource.resourceId, job.sessionDate, startMins);
+
+  const bookable = page.locator(`a.book-interval.not-booked[data-test-id="${testId}"]`);
+  if ((await bookable.count()) > 0) {
+    await bookable.first().click();
+    return;
   }
-  if (courtIdx < 0 || courtIdx >= n) {
-    throw new Error(
-      `Court ${job.courtLabel}: index ${courtIdx + 1} but only ${n} bookable column(s) at that time (expected Court 1..${n}).`,
-    );
-  }
-  await cells.nth(courtIdx).click();
+
+  // Distinguish "cell exists but not bookable" (anchor without `not-booked`) from "no cell at all"
+  // (inside a multi-slot booking block, court closure, or outside grid hours). The former maps to
+  // already-booked/released; the latter to structural grid state.
+  const anyAnchor = page.locator(`a.book-interval[data-test-id="${testId}"]`);
+  const hasUnbookable = (await anyAnchor.count()) > 0;
+  throw new Error(
+    hasUnbookable
+      ? `${job.courtLabel} at ${job.start} on ${job.sessionDate} is not bookable (already booked or outside release window).`
+      : `${job.courtLabel} at ${job.start} on ${job.sessionDate}: no 30-min cell in grid (likely inside an existing booking block, closure, or outside grid hours).`,
+  );
 }
 
 /**
@@ -387,12 +485,13 @@ export async function clickConfirmAndPay(page: Page): Promise<void> {
 
 /**
  * Full path after you are already on the booking URL and signed in:
- * cookie → calendar → slot → basket (no payment).
+ * cookie → calendar → discover courts → slot → basket (no payment).
  */
 export async function bookJobThroughBasket(page: Page, job: PlannedJob): Promise<void> {
   await tryDismissCookieConsent(page);
   await pickSessionDateInCalendar(page, job.sessionDate);
-  await clickSlotForPlannedJob(page, job);
+  const resources = await discoverCourtResources(page);
+  await clickSlotForPlannedJob(page, job, resources);
   await completeBookingDurationOverlay(page, job);
   await proceedThroughTermsToBasket(page);
 }

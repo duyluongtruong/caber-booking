@@ -3,6 +3,7 @@ node_modules/
 
 # Local secrets — never commit
 config/accounts.local.json
+config/card.local.json
 .env
 .env.local
 *.pem
