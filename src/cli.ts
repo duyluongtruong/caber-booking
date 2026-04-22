@@ -27,7 +27,11 @@ import {
   bookOneRequestedSpanExceedsTwoHours,
   planBookOneJobs,
   resolveBookOneStartEnd,
+  resolveCourtForBookOne,
 } from "./bookOnePlan.js";
+import { readGatePinFromManageBookings } from "./adapters/clubspark/manageBookingsPin.js";
+import { assertIsoDate } from "./sessionDate.js";
+import type { PlannedJob } from "./planner/types.js";
 
 const program = new Command()
   .name("tennis-booking")
@@ -316,6 +320,113 @@ program
       } catch (e) {
         console.error("tennis-booking: book-one failed:", e instanceof Error ? e.message : e);
         process.exitCode = 1;
+      }
+    },
+  );
+
+program
+  .command("read-pin")
+  .description(
+    "Open Manage bookings for an account and print the gate PIN for a session/court/time (no payment; for testing the PIN scraper)",
+  )
+  .requiredOption("-d, --date <yyyy-mm-dd>", "Session date (must match the booking row on My bookings)")
+  .requiredOption("-a, --account <id>", "Account id from config (whose Clubspark login / bookings list to use)")
+  .option("--court <label-or-number>", "Court (default: 1)")
+  .option("--start <HH:mm>", "Start time shown in the booking panel title (or defaultSessionStart from config)")
+  .option("--end <HH:mm>", "End time in the panel title (or defaultSessionEnd from config)")
+  .option("-c, --config <path>", "accounts JSON (default: env TENNIS_BOOKING_ACCOUNTS or config/accounts.local.json)")
+  .option("--headless", "Run headless (default: headed)", false)
+  .action(
+    async (opts: {
+      date: string;
+      account: string;
+      court?: string;
+      start?: string;
+      end?: string;
+      config?: string;
+      headless: boolean;
+    }) => {
+      const configPath = resolveCliConfigPath(opts.config);
+
+      if (!existsSync(configPath)) {
+        console.error(`tennis-booking: config file not found: ${configPath}`);
+        process.exitCode = 1;
+        return;
+      }
+
+      let cfg;
+      try {
+        cfg = loadConfig(configPath);
+      } catch (e) {
+        console.error("tennis-booking:", e instanceof Error ? e.message : e);
+        process.exitCode = 1;
+        return;
+      }
+
+      const account = cfg.accounts.find((x) => x.id === opts.account);
+      if (!account) {
+        console.error(
+          `tennis-booking: no active account with id "${opts.account}". Run: npm run cli -- config check`,
+        );
+        process.exitCode = 1;
+        return;
+      }
+
+      let sessionDate: string;
+      try {
+        sessionDate = assertIsoDate(opts.date);
+      } catch (e) {
+        console.error("tennis-booking:", e instanceof Error ? e.message : e);
+        process.exitCode = 1;
+        return;
+      }
+
+      let start: string;
+      let end: string;
+      try {
+        ({ start, end } = resolveBookOneStartEnd(cfg, opts.start, opts.end));
+      } catch (e) {
+        console.error("tennis-booking:", e instanceof Error ? e.message : e);
+        process.exitCode = 1;
+        return;
+      }
+
+      let courtLabel: string;
+      try {
+        courtLabel = resolveCourtForBookOne(opts.court).courtLabel;
+      } catch (e) {
+        console.error("tennis-booking:", e instanceof Error ? e.message : e);
+        process.exitCode = 1;
+        return;
+      }
+
+      const job: PlannedJob = {
+        sequence: 1,
+        accountId: account.id,
+        courtLabel,
+        start,
+        end,
+        sessionDate,
+      };
+
+      console.error(
+        `read-pin: ${account.label} (${account.username}) / ${courtLabel} ${start}-${end} on ${sessionDate} (stderr: scrape logs; stdout: PIN only if found)`,
+      );
+
+      const browser = await chromium.launch({ headless: opts.headless });
+      try {
+        const pin = await readGatePinFromManageBookings(browser, account, job);
+        if (pin) {
+          console.log(pin);
+        } else {
+          console.error("read-pin: no PIN matched — check My bookings row matches date, start time, and court");
+          process.exitCode = 1;
+        }
+      } catch (e) {
+        console.error("tennis-booking: read-pin failed:", e instanceof Error ? e.message : e);
+        process.exitCode = 1;
+      } finally {
+        await browser.close();
       }
     },
   );

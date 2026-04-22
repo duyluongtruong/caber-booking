@@ -1,4 +1,3 @@
-import { setTimeout as sleep } from "node:timers/promises";
 import { chromium, type Browser } from "playwright";
 import { loadConfig, type ConfigAccount, type LoadedConfig } from "../loadConfig.js";
 import { planJobs } from "../planner/planJobs.js";
@@ -14,8 +13,9 @@ import {
   proceedThroughTermsToBasket,
   tryDismissCookieConsent,
 } from "../adapters/clubspark/bookSlot.js";
+import { readGatePinFromManageBookings } from "../adapters/clubspark/manageBookingsPin.js";
 import { payWithCard, type CardPaymentInput } from "../adapters/clubspark/pay.js";
-import { readGatePinForJob } from "../adapters/clubspark/confirmation.js";
+import { CABER_PARK_MANAGE_BOOKINGS } from "../adapters/clubspark/selectors.js";
 import { LedgerStore } from "../ledger/store.js";
 import { buildMondayThreeCourtTemplate } from "../mondayPlan.js";
 
@@ -115,7 +115,10 @@ async function runOneJob(
     const cardPayload =
       typeof card === "function" ? { ...(await card()) } : { ...card };
     await payWithCard(page, cardPayload);
-    return readGatePinForJob(page, job);
+    console.error(
+      `pin: payment complete — fetching gate PIN from Manage bookings (${CABER_PARK_MANAGE_BOOKINGS})`,
+    );
+    return readGatePinFromManageBookings(browser, account, job);
   } finally {
     await context.close();
   }
