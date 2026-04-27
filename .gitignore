@@ -8,8 +8,8 @@ config/card.local.json
 .env.local
 *.pem
 
-# Ledger / runtime data
-data/
+# Ledger / runtime data — `data/` is committed (viewer page + ledger.json live there).
+# Add explicit ignores below if some files in `data/` should stay local-only.
 *.db
 
 # Playwright
@@ -22,3 +22,6 @@ playwright/.cache/
 dist/
 .DS_Store
 *.log
+
+# Brainstorming companion (transient mockups)
+.superpowers/
