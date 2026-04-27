@@ -26,16 +26,29 @@ export function formatDateHeader(iso: string): string {
 }
 
 export function pinOrBadge(row: LedgerRow): PinOrBadge {
-  if (row.status === "confirmed") {
-    if (row.accessCode) return { kind: "pin", value: row.accessCode };
-    return { kind: "badge", label: "⚠ no PIN", tone: "warn" };
+  switch (row.status) {
+    case "confirmed":
+      return row.accessCode
+        ? { kind: "pin", value: row.accessCode }
+        : { kind: "badge", label: "⚠ no PIN", tone: "warn" };
+    case "manual_override":
+      return row.accessCode
+        ? { kind: "pin", value: row.accessCode, edited: true }
+        : { kind: "badge", label: "⚠ no PIN", tone: "warn" };
+    case "pending_pin":
+      return { kind: "badge", label: "⏳ pending", tone: "warn" };
+    case "failed":
+      return { kind: "badge", label: "⛔ failed", tone: "error" };
+    case "not_started":
+      return { kind: "badge", label: "· queued", tone: "muted" };
+    default: {
+      // Compile-time exhaustiveness: if a new LedgerStatus is added to types.ts,
+      // this assignment fails type-check until a case is added above.
+      // The runtime fallback below is intentional for forward compatibility
+      // when older bundles encounter new status strings from a fresher ledger.
+      const _exhaustive: never = row.status;
+      void _exhaustive;
+      return { kind: "badge", label: String(row.status), tone: "muted" };
+    }
   }
-  if (row.status === "manual_override") {
-    if (row.accessCode) return { kind: "pin", value: row.accessCode, edited: true };
-    return { kind: "badge", label: "⚠ no PIN", tone: "warn" };
-  }
-  if (row.status === "pending_pin") return { kind: "badge", label: "⏳ pending", tone: "warn" };
-  if (row.status === "failed") return { kind: "badge", label: "⛔ failed", tone: "error" };
-  if (row.status === "not_started") return { kind: "badge", label: "· queued", tone: "muted" };
-  return { kind: "badge", label: String(row.status), tone: "muted" };
 }

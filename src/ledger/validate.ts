@@ -1,12 +1,12 @@
 import type { LedgerFile, LedgerRow, LedgerStatus } from "./types.js";
 
-const STATUSES: ReadonlySet<LedgerStatus> = new Set([
-  "not_started",
-  "pending_pin",
-  "confirmed",
-  "manual_override",
-  "failed",
-]);
+const STATUSES: Readonly<Record<LedgerStatus, true>> = {
+  not_started: true,
+  pending_pin: true,
+  confirmed: true,
+  manual_override: true,
+  failed: true,
+};
 
 function isString(x: unknown): x is string {
   return typeof x === "string";
@@ -25,7 +25,7 @@ function isLedgerRow(x: unknown): x is LedgerRow {
   if (!isString(r.end)) return false;
   if (!isString(r.accountId)) return false;
   if (!isNumber(r.jobSequence)) return false;
-  if (!isString(r.status) || !STATUSES.has(r.status as LedgerStatus)) return false;
+  if (!isString(r.status) || !(r.status in STATUSES)) return false;
   if (r.accessCode !== undefined && !isString(r.accessCode)) return false;
   if (r.bookingRef !== undefined && !isString(r.bookingRef)) return false;
   return true;
