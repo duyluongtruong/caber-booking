@@ -1,9 +1,9 @@
 import type { Page } from "playwright";
 import {
-  BOOKING_CONFIRMATION,
   PAYMENT_HOST,
   PAYMENT_SUBMIT,
   STRIPE_CARD_FRAMES,
+  type VenueContext,
 } from "./selectors.js";
 import { locatorFromSpec } from "./locator.js";
 
@@ -33,10 +33,15 @@ async function optionalHostFocus(page: Page): Promise<void> {
 }
 
 /**
- * Assumes payment view is open (after “Confirm and pay”). Fills Stripe iframes and submits.
+ * Assumes payment view is open (after “Confirm and pay”). Fills Stripe iframes and submits,
+ * then waits for the venue-specific `BookingConfirmation/{id}` redirect described by `ctx`.
  * Does not persist card data; caller should discard `card` after await.
  */
-export async function payWithCard(page: Page, card: CardPaymentInput): Promise<void> {
+export async function payWithCard(
+  page: Page,
+  ctx: VenueContext,
+  card: CardPaymentInput,
+): Promise<void> {
   await optionalHostFocus(page);
 
   await stripeTextbox(page, STRIPE_CARD_FRAMES.cardNumber).fill(card.cardNumber);
@@ -45,7 +50,7 @@ export async function payWithCard(page: Page, card: CardPaymentInput): Promise<v
 
   await locatorFromSpec(page, PAYMENT_SUBMIT.pay).click();
 
-  await page.waitForURL(BOOKING_CONFIRMATION.urlPathRegex, { timeout: 120_000 });
+  await page.waitForURL(ctx.confirmationUrlRegex, { timeout: 120_000 });
 
   card.cardNumber = "";
   card.expiry = "";

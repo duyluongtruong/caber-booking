@@ -1,6 +1,6 @@
 import type { Page } from "playwright";
 import type { PlannedJob } from "../../planner/types.js";
-import { BOOKING_CONFIRMATION, extractCourtPinFromText } from "./selectors.js";
+import { extractCourtPinFromText, type VenueContext } from "./selectors.js";
 import { courtNumberFromLabel } from "./bookSlot.js";
 
 /**
@@ -19,16 +19,20 @@ import { courtNumberFromLabel } from "./bookSlot.js";
  * Emits `pin:` prefixed diagnostic lines to `console.error` so an operator can see exactly which
  * step failed (URL mismatch, card not visible, wrong court, etc.) without re-running with a debugger.
  */
-export async function readGatePinForJob(page: Page, job: PlannedJob): Promise<string | null> {
+export async function readGatePinForJob(
+  page: Page,
+  ctx: VenueContext,
+  job: PlannedJob,
+): Promise<string | null> {
   const courtNum = courtNumberFromLabel(job.courtLabel);
   const url = page.url();
   console.error(`pin: url=${url}`);
   console.error(`pin: looking for Court ${courtNum} (job.courtLabel="${job.courtLabel}")`);
 
-  if (!BOOKING_CONFIRMATION.urlPathRegex.test(url)) {
+  if (!ctx.confirmationUrlRegex.test(url)) {
     console.error(`pin: URL does not match confirmation pattern — waiting up to 15s`);
     try {
-      await page.waitForURL(BOOKING_CONFIRMATION.urlPathRegex, { timeout: 15_000 });
+      await page.waitForURL(ctx.confirmationUrlRegex, { timeout: 15_000 });
       console.error(`pin: URL settled to ${page.url()}`);
     } catch {
       console.error(`pin: URL never matched; continuing anyway with ${page.url()}`);

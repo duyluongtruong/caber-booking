@@ -1,6 +1,12 @@
 import type { Locator, Page } from "playwright";
 import type { PlannedJob } from "../../planner/types.js";
-import { BOOKING_FLOW, COOKIE_CONSENT, STRIPE_PAY_NOW, bookingUrl } from "./selectors.js";
+import {
+  BOOKING_FLOW,
+  COOKIE_CONSENT,
+  STRIPE_PAY_NOW,
+  bookingUrl,
+  type VenueContext,
+} from "./selectors.js";
 import { locatorFromSpec } from "./locator.js";
 
 /** Parse jQuery UI `.ui-datepicker-title` text (e.g. `April 2026`, `Apr 2026`). */
@@ -237,16 +243,20 @@ export async function discoverCourtResources(page: Page): Promise<CourtResourceM
 export type GotoBookingOptions = { role?: "guest" | "member" };
 
 /**
- * Load the book-by-date page for `sessionDate`. Use `{ role: "guest" }` before login; after sign-in,
- * call again **without** `role` (or omit) so `#?date=YYYY-MM-DD` is reapplied — the SignIn redirect
- * otherwise drops the hash and the grid shows today.
+ * Load the book-by-date page for `sessionDate` at the venue described by `ctx`. Use
+ * `{ role: "guest" }` before login; after sign-in, call again **without** `role` (or omit)
+ * so `#?date=YYYY-MM-DD` is reapplied — the SignIn redirect otherwise drops the hash and
+ * the grid shows today.
  */
 export async function gotoBookingForSession(
   page: Page,
+  ctx: VenueContext,
   sessionDate: string,
   opts?: GotoBookingOptions,
 ): Promise<void> {
-  await page.goto(bookingUrl({ date: sessionDate, role: opts?.role }), { waitUntil: "domcontentloaded" });
+  await page.goto(bookingUrl(ctx, { date: sessionDate, role: opts?.role }), {
+    waitUntil: "domcontentloaded",
+  });
   await page.waitForLoadState("networkidle").catch(() => {});
 }
 

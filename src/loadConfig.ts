@@ -1,11 +1,20 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { BookingAccount } from "./planner/types.js";
+import {
+  DEFAULT_VENUE_SLUG,
+  buildVenueContext,
+  extractVenueSlugFromBookingBaseUrl,
+  type VenueContext,
+} from "./adapters/clubspark/selectors.js";
 
 export type ConfigAccount = BookingAccount & { username: string; password: string };
 
 export type LoadedConfig = {
   venueBaseUrl?: string;
+  venueSlug?: string;
+  /** Resolved per-venue URLs, derived from `venueSlug` (or extracted from `venueBaseUrl`). */
+  venue: VenueContext;
   defaultSessionStart?: string;
   defaultSessionEnd?: string;
   accounts: ConfigAccount[];
@@ -28,6 +37,28 @@ export function resolveConfigPath(): string {
     return path.isAbsolute(fromEnv) ? fromEnv : path.resolve(process.cwd(), fromEnv);
   }
   return path.join(process.cwd(), "config", "accounts.local.json");
+}
+
+/**
+ * Resolve the active `VenueContext` for a single run.
+ *
+ * Precedence (highest first):
+ *   1. `cliVenueSlug` (e.g. from `--venue <slug>`) — for one-off runs against a different venue.
+ *   2. `cfg.venue` (built from `cfg.venueSlug` at config load time) — the persistent default.
+ *
+ * Empty/whitespace `cliVenueSlug` is ignored. Throws if an explicitly supplied slug is not
+ * URL-safe. Accounts and other config are unaffected — only the venue URLs change.
+ */
+export function resolveVenueForRun(
+  cfg: LoadedConfig,
+  cliVenueSlug?: string | null,
+): VenueContext {
+  const override = typeof cliVenueSlug === "string" && cliVenueSlug.trim().length > 0
+    ? cliVenueSlug.trim()
+    : null;
+  if (override === null) return cfg.venue;
+  if (override === cfg.venue.slug) return cfg.venue;
+  return buildVenueContext(override);
 }
 
 export function loadConfig(filePath: string): LoadedConfig {
@@ -53,6 +84,36 @@ export function loadConfig(filePath: string): LoadedConfig {
     parsed.venueBaseUrl === undefined
       ? undefined
       : nonEmptyString(parsed.venueBaseUrl, "venueBaseUrl", "Config");
+  const venueSlug =
+    parsed.venueSlug === undefined
+      ? undefined
+      : nonEmptyString(parsed.venueSlug, "venueSlug", "Config");
+
+  let resolvedSlug: string;
+  if (venueSlug !== undefined) {
+    resolvedSlug = venueSlug;
+  } else if (venueBaseUrl !== undefined) {
+    const extracted = extractVenueSlugFromBookingBaseUrl(venueBaseUrl);
+    if (extracted === null) {
+      console.error(
+        `Config: could not extract venueSlug from venueBaseUrl "${venueBaseUrl}" — falling back to default "${DEFAULT_VENUE_SLUG}". Set "venueSlug" explicitly to silence this warning.`,
+      );
+      resolvedSlug = DEFAULT_VENUE_SLUG;
+    } else {
+      resolvedSlug = extracted;
+    }
+  } else {
+    resolvedSlug = DEFAULT_VENUE_SLUG;
+  }
+
+  let venue: VenueContext;
+  try {
+    venue = buildVenueContext(resolvedSlug);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(`Config: invalid venueSlug "${resolvedSlug}": ${msg}`);
+  }
+
   const defaultSessionStart =
     parsed.defaultSessionStart === undefined
       ? undefined
@@ -107,6 +168,8 @@ export function loadConfig(filePath: string): LoadedConfig {
 
   return {
     ...(venueBaseUrl !== undefined ? { venueBaseUrl } : {}),
+    ...(venueSlug !== undefined ? { venueSlug } : {}),
+    venue,
     ...(defaultSessionStart !== undefined ? { defaultSessionStart } : {}),
     ...(defaultSessionEnd !== undefined ? { defaultSessionEnd } : {}),
     accounts,

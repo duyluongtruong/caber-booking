@@ -6,8 +6,10 @@ import {
   planBookOneJobs,
 } from "../src/bookOnePlan.ts";
 import type { LoadedConfig } from "../src/loadConfig.ts";
+import { buildVenueContext, DEFAULT_VENUE_SLUG } from "../src/adapters/clubspark/selectors.ts";
 
 const labels = ["Court 1", "Court 2", "Court 3"] as const;
+const TEST_VENUE = buildVenueContext(DEFAULT_VENUE_SLUG);
 
 test("resolveCourtForBookOne accepts bare court numbers", () => {
   assert.deepEqual(resolveCourtForBookOne("1", labels), { courtIndex: 0, courtLabel: "Court 1" });
@@ -33,6 +35,7 @@ test("resolveCourtForBookOne rejects out-of-range numbers and unknown labels", (
 
 test("planBookOneJobs splits >2h and assigns single account when --account override", () => {
   const cfg: LoadedConfig = {
+    venue: TEST_VENUE,
     accounts: [
       { id: "a", label: "A", username: "u1", password: "p1", maxBookingsPerDay: 2 },
       { id: "b", label: "B", username: "u2", password: "p2" },
@@ -55,6 +58,7 @@ test("planBookOneJobs splits >2h and assigns single account when --account overr
 
 test("planBookOneJobs uses config default session times when start/end omitted", () => {
   const cfg: LoadedConfig = {
+    venue: TEST_VENUE,
     defaultSessionStart: "18:00",
     defaultSessionEnd: "19:30",
     accounts: [{ id: "x", label: "X", username: "u", password: "p" }],
@@ -76,6 +80,7 @@ test("bookOneRequestedSpanExceedsTwoHours is true only when span is strictly ove
 
 test("planBookOneJobs throws when no start/end and no config defaults", () => {
   const cfg: LoadedConfig = {
+    venue: TEST_VENUE,
     accounts: [{ id: "x", label: "X", username: "u", password: "p" }],
   };
   assert.throws(
@@ -89,6 +94,7 @@ test("planBookOneJobs throws when no start/end and no config defaults", () => {
 
 test("planBookOneJobs rejects unknown --account override id", () => {
   const cfg: LoadedConfig = {
+    venue: TEST_VENUE,
     accounts: [{ id: "a", label: "A", username: "u", password: "p" }],
   };
   assert.throws(
@@ -106,6 +112,7 @@ test("planBookOneJobs rejects unknown --account override id", () => {
 
 test("planBookOneJobs rejects --account override when split jobs exceed that account's per-day cap", () => {
   const cfg: LoadedConfig = {
+    venue: TEST_VENUE,
     accounts: [{ id: "a", label: "A", username: "u", password: "p", maxBookingsPerDay: 1 }],
   };
   assert.throws(

@@ -1,4 +1,5 @@
 {
+  "venueSlug": "ExampleSampleCourts",
   "venueBaseUrl": "https://example.test/venue/booking",
   "defaultSessionStart": "08:00",
   "defaultSessionEnd": "12:00",

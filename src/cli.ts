@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { Command } from "commander";
 import { chromium } from "playwright";
-import { loadConfig, resolveConfigPath } from "./loadConfig.js";
+import { loadConfig, resolveConfigPath, resolveVenueForRun } from "./loadConfig.js";
 import { login } from "./adapters/clubspark/auth.js";
 import {
   clickSlotForPlannedJob,
@@ -35,7 +35,9 @@ import type { PlannedJob } from "./planner/types.js";
 
 const program = new Command()
   .name("tennis-booking")
-  .description("Local helper for multi-account Clubspark (Caber Park) booking");
+  .description(
+    "Local helper for multi-account Clubspark booking (venue selected via config: venueSlug)",
+  );
 
 function resolveCliConfigPath(config?: string): string {
   return config
@@ -85,8 +87,12 @@ program
     (v) => parseInt(v, 10),
   )
   .option("-c, --config <path>", "accounts JSON (default: env TENNIS_BOOKING_ACCOUNTS or config/accounts.local.json)")
+  .option(
+    "--venue <slug>",
+    "Override venue slug for this run (default: cfg.venueSlug from config). Same accounts; different Clubspark venue URL.",
+  )
   .option("--headless", "Run headless (default: headed)", false)
-  .action(async (opts: { date?: string; weeks?: number; config?: string; headless: boolean }) => {
+  .action(async (opts: { date?: string; weeks?: number; config?: string; headless: boolean; venue?: string }) => {
     const configPath = resolveCliConfigPath(opts.config);
 
     if (!existsSync(configPath)) {
@@ -98,6 +104,15 @@ program
     let cfg;
     try {
       cfg = loadConfig(configPath);
+    } catch (e) {
+      console.error("tennis-booking:", e instanceof Error ? e.message : e);
+      process.exitCode = 1;
+      return;
+    }
+
+    let venue;
+    try {
+      venue = resolveVenueForRun(cfg, opts.venue);
     } catch (e) {
       console.error("tennis-booking:", e instanceof Error ? e.message : e);
       process.exitCode = 1;
@@ -122,7 +137,9 @@ program
       return;
     }
 
-    console.error(`dry-run: session ${sessionDate} — ${jobs.length} planned job(s) (3 courts, Mon evening)`);
+    console.error(
+      `dry-run: venue ${venue.slug} — session ${sessionDate} — ${jobs.length} planned job(s) (3 courts, Mon evening)`,
+    );
     for (const j of jobs) {
       console.error(`  ${j.sequence}. ${j.courtLabel} ${j.start}-${j.end} → account ${j.accountId}`);
     }
@@ -143,9 +160,9 @@ program
     const page = await browser.newPage();
 
     try {
-      await gotoBookingForSession(page, sessionDate, { role: "guest" });
+      await gotoBookingForSession(page, venue, sessionDate, { role: "guest" });
       await login(page, account.username, account.password);
-      await gotoBookingForSession(page, sessionDate);
+      await gotoBookingForSession(page, venue, sessionDate);
       await tryDismissCookieConsent(page);
       await pickSessionDateInCalendar(page, sessionDate);
       await clickSlotForPlannedJob(page, job);
@@ -178,12 +195,34 @@ program
     (v) => parseInt(v, 10),
   )
   .option("-c, --config <path>", "accounts JSON")
+  .option(
+    "--venue <slug>",
+    "Override venue slug for this run (default: cfg.venueSlug from config). Same accounts; different Clubspark venue URL.",
+  )
   .option("--headless", "Run headless (default: headed)", false)
-  .action(async (opts: { date?: string; weeks?: number; config?: string; headless: boolean }) => {
+  .action(async (opts: { date?: string; weeks?: number; config?: string; headless: boolean; venue?: string }) => {
     const configPath = resolveCliConfigPath(opts.config);
 
     if (!existsSync(configPath)) {
       console.error(`tennis-booking: config file not found: ${configPath}`);
+      process.exitCode = 1;
+      return;
+    }
+
+    let cfg;
+    try {
+      cfg = loadConfig(configPath);
+    } catch (e) {
+      console.error("tennis-booking:", e instanceof Error ? e.message : e);
+      process.exitCode = 1;
+      return;
+    }
+
+    let venue;
+    try {
+      venue = resolveVenueForRun(cfg, opts.venue);
+    } catch (e) {
+      console.error("tennis-booking:", e instanceof Error ? e.message : e);
       process.exitCode = 1;
       return;
     }
@@ -197,7 +236,9 @@ program
       return;
     }
 
-    console.error(`run: session ${sessionDate} — card details will be loaded from config/card.local.json if present, else prompted (not logged).`);
+    console.error(
+      `run: venue ${venue.slug} — session ${sessionDate} — card details will be loaded from config/card.local.json if present, else prompted (not logged).`,
+    );
 
     let card;
     try {
@@ -214,6 +255,7 @@ program
         sessionDate,
         headless: opts.headless,
         card,
+        venue,
       });
     } catch (e) {
       console.error("tennis-booking: run failed:", e instanceof Error ? e.message : e);
@@ -232,6 +274,10 @@ program
   .option("--end <HH:mm>", "Window end (or defaultSessionEnd in config)")
   .option("--account <id>", "Use only this booking account id for all jobs")
   .option("-c, --config <path>", "accounts JSON (default: env TENNIS_BOOKING_ACCOUNTS or config/accounts.local.json)")
+  .option(
+    "--venue <slug>",
+    "Override venue slug for this run (default: cfg.venueSlug from config). Same accounts; different Clubspark venue URL.",
+  )
   .option("--headless", "Run headless (default: headed)", false)
   .option("--dry-run", "Walk each job to checkout only (no payment)", false)
   .action(
@@ -242,6 +288,7 @@ program
       end?: string;
       account?: string;
       config?: string;
+      venue?: string;
       headless: boolean;
       dryRun: boolean;
     }) => {
@@ -256,6 +303,15 @@ program
       let cfg;
       try {
         cfg = loadConfig(configPath);
+      } catch (e) {
+        console.error("tennis-booking:", e instanceof Error ? e.message : e);
+        process.exitCode = 1;
+        return;
+      }
+
+      let venue;
+      try {
+        venue = resolveVenueForRun(cfg, opts.venue);
       } catch (e) {
         console.error("tennis-booking:", e instanceof Error ? e.message : e);
         process.exitCode = 1;
@@ -286,7 +342,7 @@ program
         return;
       }
 
-      console.error(`book-one: session ${opts.date} — ${jobs.length} planned job(s) (one court)`);
+      console.error(`book-one: venue ${venue.slug} — session ${opts.date} — ${jobs.length} planned job(s) (one court)`);
       if (bookOneRequestedSpanExceedsTwoHours(window.start, window.end)) {
         console.error(
           `book-one: requested window ${window.start}–${window.end} is longer than 2h; planned checkouts:`,
@@ -298,7 +354,7 @@ program
 
       if (opts.dryRun) {
         try {
-          await dryRunBookOneSession({ configPath, jobs, headless: opts.headless });
+          await dryRunBookOneSession({ configPath, jobs, headless: opts.headless, venue });
         } catch (e) {
           console.error("tennis-booking: book-one dry-run failed:", e instanceof Error ? e.message : e);
           process.exitCode = 1;
@@ -316,6 +372,7 @@ program
           jobs,
           headless: opts.headless,
           getCardWhenNeeded: getCardInput,
+          venue,
         });
       } catch (e) {
         console.error("tennis-booking: book-one failed:", e instanceof Error ? e.message : e);
@@ -335,6 +392,10 @@ program
   .option("--start <HH:mm>", "Start time shown in the booking panel title (or defaultSessionStart from config)")
   .option("--end <HH:mm>", "End time in the panel title (or defaultSessionEnd from config)")
   .option("-c, --config <path>", "accounts JSON (default: env TENNIS_BOOKING_ACCOUNTS or config/accounts.local.json)")
+  .option(
+    "--venue <slug>",
+    "Override venue slug for this run (default: cfg.venueSlug from config). Same accounts; different Clubspark venue URL.",
+  )
   .option("--headless", "Run headless (default: headed)", false)
   .action(
     async (opts: {
@@ -344,6 +405,7 @@ program
       start?: string;
       end?: string;
       config?: string;
+      venue?: string;
       headless: boolean;
     }) => {
       const configPath = resolveCliConfigPath(opts.config);
@@ -357,6 +419,15 @@ program
       let cfg;
       try {
         cfg = loadConfig(configPath);
+      } catch (e) {
+        console.error("tennis-booking:", e instanceof Error ? e.message : e);
+        process.exitCode = 1;
+        return;
+      }
+
+      let venue;
+      try {
+        venue = resolveVenueForRun(cfg, opts.venue);
       } catch (e) {
         console.error("tennis-booking:", e instanceof Error ? e.message : e);
         process.exitCode = 1;
@@ -410,12 +481,12 @@ program
       };
 
       console.error(
-        `read-pin: ${account.label} (${account.username}) / ${courtLabel} ${start}-${end} on ${sessionDate} (stderr: scrape logs; stdout: PIN only if found)`,
+        `read-pin: venue ${venue.slug} — ${account.label} (${account.username}) / ${courtLabel} ${start}-${end} on ${sessionDate} (stderr: scrape logs; stdout: PIN only if found)`,
       );
 
       const browser = await chromium.launch({ headless: opts.headless });
       try {
-        const pin = await readGatePinFromManageBookings(browser, account, job);
+        const pin = await readGatePinFromManageBookings(browser, venue, account, job);
         if (pin) {
           console.log(pin);
         } else {

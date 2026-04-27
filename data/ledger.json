@@ -1,0 +1,177 @@
+{
+  "sessions": {
+    "2026-04-13": [
+      {
+        "sessionDate": "2026-04-13",
+        "courtLabel": "Court 1",
+        "start": "16:00",
+        "end": "17:00",
+        "accountId": "1",
+        "jobSequence": 1,
+        "status": "failed"
+      }
+    ],
+    "2026-04-16": [
+      {
+        "sessionDate": "2026-04-16",
+        "courtLabel": "Court 1",
+        "start": "15:30",
+        "end": "16:30",
+        "accountId": "1",
+        "jobSequence": 1,
+        "status": "failed"
+      },
+      {
+        "sessionDate": "2026-04-16",
+        "courtLabel": "Court 2",
+        "start": "15:30",
+        "end": "16:30",
+        "accountId": "1",
+        "jobSequence": 1,
+        "status": "not_started"
+      }
+    ],
+    "2026-04-18": [
+      {
+        "sessionDate": "2026-04-18",
+        "courtLabel": "Court 2",
+        "start": "16:00",
+        "end": "17:00",
+        "accountId": "1",
+        "jobSequence": 1,
+        "status": "not_started"
+      },
+      {
+        "sessionDate": "2026-04-18",
+        "courtLabel": "Court 2",
+        "start": "17:00",
+        "end": "17:30",
+        "accountId": "1",
+        "jobSequence": 1,
+        "status": "not_started"
+      }
+    ],
+    "2026-04-20": [
+      {
+        "sessionDate": "2026-04-20",
+        "courtLabel": "Court 1",
+        "start": "15:30",
+        "end": "16:00",
+        "accountId": "1",
+        "jobSequence": 1,
+        "status": "failed"
+      }
+    ],
+    "2026-04-27": [
+      {
+        "sessionDate": "2026-04-27",
+        "courtLabel": "Court 2",
+        "start": "19:00",
+        "end": "19:30",
+        "accountId": "1",
+        "jobSequence": 1,
+        "status": "failed"
+      },
+      {
+        "sessionDate": "2026-04-27",
+        "courtLabel": "Court 3",
+        "start": "19:30",
+        "end": "20:00",
+        "accountId": "1",
+        "jobSequence": 1,
+        "status": "not_started"
+      }
+    ],
+    "2026-05-04": [
+      {
+        "sessionDate": "2026-05-04",
+        "courtLabel": "Court 2",
+        "start": "19:00",
+        "end": "19:30",
+        "accountId": "1",
+        "jobSequence": 1,
+        "status": "pending_pin"
+      },
+      {
+        "sessionDate": "2026-05-04",
+        "courtLabel": "Court 1",
+        "start": "19:00",
+        "end": "19:30",
+        "accountId": "1",
+        "jobSequence": 1,
+        "status": "pending_pin"
+      },
+      {
+        "sessionDate": "2026-05-04",
+        "courtLabel": "Court 3",
+        "start": "19:30",
+        "end": "20:00",
+        "accountId": "1",
+        "jobSequence": 1,
+        "status": "not_started"
+      }
+    ],
+    "2026-05-11": [
+      {
+        "sessionDate": "2026-05-11",
+        "courtLabel": "Court 1",
+        "start": "19:00",
+        "end": "19:30",
+        "accountId": "1",
+        "jobSequence": 1,
+        "status": "pending_pin"
+      },
+      {
+        "sessionDate": "2026-05-11",
+        "courtLabel": "Court 2",
+        "start": "19:00",
+        "end": "19:30",
+        "accountId": "1",
+        "jobSequence": 1,
+        "status": "pending_pin"
+      },
+      {
+        "sessionDate": "2026-05-11",
+        "courtLabel": "Court 3",
+        "start": "19:30",
+        "end": "20:00",
+        "accountId": "1",
+        "jobSequence": 1,
+        "status": "failed"
+      }
+    ],
+    "2026-05-18": [
+      {
+        "sessionDate": "2026-05-18",
+        "courtLabel": "Court 3",
+        "start": "19:30",
+        "end": "20:00",
+        "accountId": "1",
+        "jobSequence": 1,
+        "status": "not_started"
+      }
+    ],
+    "2026-04-24": [
+      {
+        "sessionDate": "2026-04-24",
+        "courtLabel": "Court 1",
+        "start": "16:00",
+        "end": "16:30",
+        "accountId": "1",
+        "jobSequence": 1,
+        "status": "not_started"
+      }
+    ],
+    "2026-04-26": [
+      {
+        "sessionDate": "2026-04-26",
+        "courtLabel": "Court 1",
+        "start": "10:00",
+        "end": "10:30",
+        "accountId": "1",
+        "jobSequence": 1,
+        "status": "not_started"
+      }
+    ]
+  }
+}

@@ -7,19 +7,96 @@
  * Full spike notes: `docs/superpowers/notes/clubspark-ui-spike.md`
  */
 
-export const CABER_PARK_BOOKING_BASE =
-  "https://play.tennis.com.au/CaberParkTennisCourts/Booking/BookByDate";
+/**
+ * Slug used when no `venueSlug` (or parseable `venueBaseUrl`) is provided in config.
+ * Preserves historical behaviour for callers/tests that don't pass a `VenueContext`.
+ */
+export const DEFAULT_VENUE_SLUG = "CaberParkTennisCourts";
 
-export const CABER_PARK_MANAGE_BOOKINGS =
-  "https://play.tennis.com.au/CaberParkTennisCourts/Booking/Bookings";
+const PLAY_TENNIS_HOST = "https://play.tennis.com.au";
 
-/** Build booking URL with optional date (YYYY-MM-DD) and role. */
-export function bookingUrl(opts?: { date?: string; role?: "guest" | "member" }) {
+/**
+ * Resolved per-venue URLs. Build once via {@link buildVenueContext} from the venue slug
+ * (e.g. `"CaberParkTennisCourts"`, `"FairfieldTennisCourts"`) and thread through adapters.
+ */
+export type VenueContext = {
+  /** Slug component of the venue path (e.g. `"CaberParkTennisCourts"`). */
+  slug: string;
+  /** Book-by-date base URL (no `#?date=` hash). */
+  bookingBase: string;
+  /** "Your bookings" page URL (used by the Manage Bookings PIN scraper). */
+  manageBookings: string;
+  /** Matches the `/{slug}/Booking/BookingConfirmation/{uuid}` redirect after pay. */
+  confirmationUrlRegex: RegExp;
+};
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Build per-venue URL pieces from a Clubspark venue slug. All Clubspark venues on
+ * `play.tennis.com.au` share an identical URL shape — only the slug varies — so this is
+ * the single seam adapters use to support more venues without touching selectors.
+ */
+export function buildVenueContext(slug: string): VenueContext {
+  if (typeof slug !== "string" || slug.length === 0) {
+    throw new Error("buildVenueContext: slug must be a non-empty string");
+  }
+  if (!/^[A-Za-z0-9._-]+$/.test(slug)) {
+    throw new Error(
+      `buildVenueContext: slug "${slug}" must be URL-safe (letters, digits, '.', '_', '-' only)`,
+    );
+  }
+  const base = `${PLAY_TENNIS_HOST}/${slug}/Booking`;
+  return {
+    slug,
+    bookingBase: `${base}/BookByDate`,
+    manageBookings: `${base}/Bookings`,
+    confirmationUrlRegex: new RegExp(
+      `/${escapeRegExp(slug)}/Booking/BookingConfirmation/[0-9a-f-]+`,
+      "i",
+    ),
+  };
+}
+
+const DEFAULT_VENUE_CONTEXT = buildVenueContext(DEFAULT_VENUE_SLUG);
+
+/**
+ * Build booking URL with optional date (YYYY-MM-DD) and role. If `ctx` is omitted we
+ * fall back to the default Caber Park venue so legacy callers still work.
+ */
+export function bookingUrl(
+  ctxOrOpts?: VenueContext | { date?: string; role?: "guest" | "member" },
+  maybeOpts?: { date?: string; role?: "guest" | "member" },
+): string {
+  let ctx: VenueContext;
+  let opts: { date?: string; role?: "guest" | "member" } | undefined;
+  if (ctxOrOpts && typeof ctxOrOpts === "object" && "bookingBase" in ctxOrOpts) {
+    ctx = ctxOrOpts;
+    opts = maybeOpts;
+  } else {
+    ctx = DEFAULT_VENUE_CONTEXT;
+    opts = ctxOrOpts as { date?: string; role?: "guest" | "member" } | undefined;
+  }
+
   const params = new URLSearchParams();
   if (opts?.date) params.set("date", opts.date);
   if (opts?.role) params.set("role", opts.role);
   const hash = params.toString() ? `#?${params.toString()}` : "";
-  return `${CABER_PARK_BOOKING_BASE}${hash}`;
+  return `${ctx.bookingBase}${hash}`;
+}
+
+/**
+ * Try to extract a Clubspark venue slug from a configured `venueBaseUrl` of the form
+ * `https://play.tennis.com.au/{slug}/Booking/BookByDate`. Returns `null` for any URL
+ * that doesn't match the expected shape (config should set `venueSlug` directly in that case).
+ */
+export function extractVenueSlugFromBookingBaseUrl(url: string): string | null {
+  const m = url.match(
+    /^https?:\/\/play\.tennis\.com\.au\/([A-Za-z0-9._-]+)\/Booking\/BookByDate\b/i,
+  );
+  return m?.[1] ?? null;
 }
 
 /** How to find one control; adapter maps this to Playwright calls. */
@@ -156,12 +233,13 @@ export const PAYMENT_OUTER_OPTIONAL = {
 
 /**
  * After **Pay**, Clubspark redirects to a URL like:
- * `/CaberParkTennisCourts/Booking/BookingConfirmation/{bookingId}`.
- * Do **not** hardcode the UUID — wait for navigation, e.g.
- * `page.waitForURL(BOOKING_CONFIRMATION.urlPathRegex)` (same origin as booking site).
+ * `/{VenueSlug}/Booking/BookingConfirmation/{bookingId}`. The slug is venue-specific so
+ * callers should use `ctx.confirmationUrlRegex` from {@link VenueContext} where possible.
+ * The default below preserves backward-compat for paths that haven't been threaded yet.
  */
 export const BOOKING_CONFIRMATION = {
-  urlPathRegex: /\/CaberParkTennisCourts\/Booking\/BookingConfirmation\/[0-9a-f-]+/i,
+  /** @deprecated Prefer `ctx.confirmationUrlRegex` from a `VenueContext`. Falls back to default Caber slug. */
+  urlPathRegex: DEFAULT_VENUE_CONTEXT.confirmationUrlRegex,
 } as const;
 
 /**

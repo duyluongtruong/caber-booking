@@ -8,7 +8,10 @@ import { LedgerStore, type LedgerRowPatch } from "../src/ledger/store.ts";
 import { planJobs } from "../src/planner/planJobs.ts";
 import { buildMondayThreeCourtTemplate } from "../src/mondayPlan.ts";
 import type { LoadedConfig, ConfigAccount } from "../src/loadConfig.ts";
+import { buildVenueContext, DEFAULT_VENUE_SLUG } from "../src/adapters/clubspark/selectors.ts";
 import type { PlannedJob } from "../src/planner/types.ts";
+
+const TEST_VENUE = buildVenueContext(DEFAULT_VENUE_SLUG);
 
 function withTempLedgerPath(fn: (ledgerPath: string) => Promise<void>): Promise<void> {
   const dir = mkdtempSync(path.join(os.tmpdir(), "tennis-run-"));
@@ -72,7 +75,7 @@ test("planMondayPresetJobs matches planJobs(buildMondayThreeCourtTemplate)", () 
     { id: "b", label: "B", username: "u2", password: "p2" },
     { id: "c", label: "C", username: "u3", password: "p3" },
   ];
-  const cfg: LoadedConfig = { accounts };
+  const cfg: LoadedConfig = { venue: TEST_VENUE, accounts };
   const sessionDate = "2026-05-25";
   const expected = planJobs(accounts, buildMondayThreeCourtTemplate(sessionDate));
   const actual = planMondayPresetJobs(cfg, sessionDate);

@@ -5,13 +5,16 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { chromium, type Browser, type Page } from "playwright";
 import { readGatePinForJob } from "../src/adapters/clubspark/confirmation.ts";
+import { buildVenueContext } from "../src/adapters/clubspark/selectors.ts";
 import type { PlannedJob } from "../src/planner/types.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURE_PATH = resolve(__dirname, "fixtures/confirmation-court1.html");
 const FIXTURE_HTML = readFileSync(FIXTURE_PATH, "utf8");
 
-/** URL that matches `BOOKING_CONFIRMATION.urlPathRegex`. */
+const VENUE_CTX = buildVenueContext("CaberParkTennisCourts");
+
+/** URL that matches `VENUE_CTX.confirmationUrlRegex`. */
 const CONFIRMATION_URL =
   "https://play.tennis.com.au/CaberParkTennisCourts/Booking/BookingConfirmation/11d906d2-adb2-44ce-ab6f-23f5eac96d5f";
 
@@ -58,7 +61,7 @@ async function openFixturePage(html = FIXTURE_HTML): Promise<Page> {
 test("readGatePinForJob extracts the PIN from the real Clubspark confirmation HTML (Court 1 → 0782)", async () => {
   const page = await openFixturePage();
   try {
-    const pin = await readGatePinForJob(page, makeJob("Court 1"));
+    const pin = await readGatePinForJob(page, VENUE_CTX, makeJob("Court 1"));
     assert.equal(pin, "0782");
   } finally {
     await page.context().close();
@@ -68,7 +71,7 @@ test("readGatePinForJob extracts the PIN from the real Clubspark confirmation HT
 test("readGatePinForJob returns null when the booked court isn't in the PIN card", async () => {
   const page = await openFixturePage();
   try {
-    const pin = await readGatePinForJob(page, makeJob("Court 2"));
+    const pin = await readGatePinForJob(page, VENUE_CTX, makeJob("Court 2"));
     assert.equal(pin, null);
   } finally {
     await page.context().close();
@@ -82,9 +85,9 @@ test("readGatePinForJob handles a multi-court basket (Court 1, 2, 3 each resolve
   );
   const page = await openFixturePage(multi);
   try {
-    assert.equal(await readGatePinForJob(page, makeJob("Court 1")), "0782");
-    assert.equal(await readGatePinForJob(page, makeJob("Court 2")), "1234");
-    assert.equal(await readGatePinForJob(page, makeJob("Court 3")), "9999");
+    assert.equal(await readGatePinForJob(page, VENUE_CTX, makeJob("Court 1")), "0782");
+    assert.equal(await readGatePinForJob(page, VENUE_CTX, makeJob("Court 2")), "1234");
+    assert.equal(await readGatePinForJob(page, VENUE_CTX, makeJob("Court 3")), "9999");
   } finally {
     await page.context().close();
   }
@@ -97,8 +100,8 @@ test("readGatePinForJob does not mismatch Court 1 against Court 10 in the same c
   );
   const page = await openFixturePage(withCourt10);
   try {
-    assert.equal(await readGatePinForJob(page, makeJob("Court 1")), null);
-    assert.equal(await readGatePinForJob(page, makeJob("Court 10")), "5555");
+    assert.equal(await readGatePinForJob(page, VENUE_CTX, makeJob("Court 1")), null);
+    assert.equal(await readGatePinForJob(page, VENUE_CTX, makeJob("Court 10")), "5555");
   } finally {
     await page.context().close();
   }

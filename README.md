@@ -1,6 +1,6 @@
 # tennis-booking
 
-Local helper for multi-account Clubspark (Caber Park) booking.
+Local helper for multi-account Clubspark booking. The target venue is selected via config (`venueSlug`); Caber Park is the default.
 
 ## Prerequisites
 
@@ -16,6 +16,12 @@ Local helper for multi-account Clubspark (Caber Park) booking.
 `config/accounts.local.json` is listed in `.gitignore` and must not be committed.
 
 You need **at least three active accounts** in config: Monday evening is planned as **six** separate bookings (Courts **1–3**, **19:30–21:30** and **21:30–22:00** each, 24-hour times), two per account max.
+
+### Venue (`venueSlug`)
+
+- **`venueSlug`** in `accounts.local.json` selects the Clubspark venue (e.g. `"CaberParkTennisCourts"`). All booking, login, and Manage-bookings URLs are derived from it.
+- If omitted, the slug is extracted from a legacy `venueBaseUrl`, otherwise it falls back to `CaberParkTennisCourts`.
+- **`--venue <slug>`** on `dry-run`, `run`, `book-one`, and `read-pin` overrides the config slug for that single run (same accounts; different Clubspark venue URL).
 
 ### Environment
 
@@ -47,7 +53,10 @@ Stay within the venue’s advance window (e.g. 28 days).
 | `npm run cli -- dry-run --date 2026-05-25` | Same, fixed session date |
 | `npm run cli -- run --weeks 2` | Plan six jobs; prompt for card; run **every** checkout sequentially (**six charges**); write `data/ledger.json` + print Markdown |
 | `npm run cli -- run --date 2026-05-25` | Same with explicit Monday date |
-| `npm run cli -- … --headless` | Use with `dry-run` or `run` for headless Chromium |
+| `npm run cli -- book-one --date 2026-05-25 --court 1 --start 19:30 --end 22:00` | Plan one court (≤2h per checkout) and run each job; add `--account <id>` to pin a single account, `--dry-run` to stop at checkout |
+| `npm run cli -- read-pin --date 2026-05-25 --account 1` | Open Manage bookings for an account and print the gate PIN for that session/court (no payment) |
+| `npm run cli -- … --venue <slug>` | Override `venueSlug` from config for this run (any of `dry-run`, `run`, `book-one`, `read-pin`) |
+| `npm run cli -- … --headless` | Use with `dry-run`, `run`, `book-one`, or `read-pin` for headless Chromium |
 
 ## Design
 

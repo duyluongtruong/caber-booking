@@ -4,7 +4,7 @@ import type { ConfigAccount } from "../../loadConfig.js";
 import type { PlannedJob } from "../../planner/types.js";
 import { login } from "./auth.js";
 import { courtNumberFromLabel, gotoBookingForSession, tryDismissCookieConsent } from "./bookSlot.js";
-import { CABER_PARK_MANAGE_BOOKINGS, extractCourtPinFromText } from "./selectors.js";
+import { extractCourtPinFromText, type VenueContext } from "./selectors.js";
 
 const MONTH_ABBREVS: Record<string, number> = {
   jan: 0,
@@ -233,10 +233,11 @@ export async function extractGatePinFromManageBookingsDom(page: Page, job: Plann
 
 async function ensureManageBookingsWhileLoggedIn(
   page: Page,
+  ctx: VenueContext,
   account: ConfigAccount,
   job: PlannedJob,
 ): Promise<void> {
-  await page.goto(CABER_PARK_MANAGE_BOOKINGS, { waitUntil: "domcontentloaded" });
+  await page.goto(ctx.manageBookings, { waitUntil: "domcontentloaded" });
   await page.waitForLoadState("networkidle").catch(() => {});
 
   const url = page.url().toLowerCase();
@@ -249,10 +250,10 @@ async function ensureManageBookingsWhileLoggedIn(
     url.includes("signin");
 
   if (needsLogin) {
-    await gotoBookingForSession(page, job.sessionDate, { role: "guest" });
+    await gotoBookingForSession(page, ctx, job.sessionDate, { role: "guest" });
     await login(page, account.username, account.password);
     await tryDismissCookieConsent(page);
-    await page.goto(CABER_PARK_MANAGE_BOOKINGS, { waitUntil: "domcontentloaded" });
+    await page.goto(ctx.manageBookings, { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("networkidle").catch(() => {});
   }
 }
@@ -263,14 +264,15 @@ async function ensureManageBookingsWhileLoggedIn(
  */
 export async function readGatePinFromManageBookings(
   browser: Browser,
+  ctx: VenueContext,
   account: ConfigAccount,
   job: PlannedJob,
 ): Promise<string | null> {
   const context = await browser.newContext();
   const page = await context.newPage();
-  console.error(`pin: manage bookings — new context, ${CABER_PARK_MANAGE_BOOKINGS}`);
+  console.error(`pin: manage bookings — new context, ${ctx.manageBookings}`);
   try {
-    await ensureManageBookingsWhileLoggedIn(page, account, job);
+    await ensureManageBookingsWhileLoggedIn(page, ctx, account, job);
     const deadline = Date.now() + 90_000;
     let attempt = 0;
     while (Date.now() < deadline) {

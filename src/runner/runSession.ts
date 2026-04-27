@@ -15,7 +15,7 @@ import {
 } from "../adapters/clubspark/bookSlot.js";
 import { readGatePinFromManageBookings } from "../adapters/clubspark/manageBookingsPin.js";
 import { payWithCard, type CardPaymentInput } from "../adapters/clubspark/pay.js";
-import { CABER_PARK_MANAGE_BOOKINGS } from "../adapters/clubspark/selectors.js";
+import type { VenueContext } from "../adapters/clubspark/selectors.js";
 import { LedgerStore } from "../ledger/store.js";
 import { buildMondayThreeCourtTemplate } from "../mondayPlan.js";
 
@@ -24,6 +24,8 @@ export type RunSessionOptions = {
   sessionDate: string;
   headless: boolean;
   card: CardPaymentInput;
+  /** Per-run venue override (e.g. from CLI `--venue`). Defaults to `cfg.venue`. */
+  venue?: VenueContext;
 };
 
 /** Monday preset: same jobs as `planJobs(accounts, buildMondayThreeCourtTemplate(sessionDate))`. */
@@ -100,6 +102,7 @@ function accountById(cfg: LoadedConfig, id: string): ConfigAccount {
 
 async function runOneJob(
   browser: Browser,
+  ctx: VenueContext,
   job: PlannedJob,
   account: ConfigAccount,
   card: CardPaymentInput | (() => Promise<CardPaymentInput>),
@@ -107,18 +110,18 @@ async function runOneJob(
   const context = await browser.newContext();
   const page = await context.newPage();
   try {
-    await gotoBookingForSession(page, job.sessionDate, { role: "guest" });
+    await gotoBookingForSession(page, ctx, job.sessionDate, { role: "guest" });
     await login(page, account.username, account.password);
-    await gotoBookingForSession(page, job.sessionDate);
+    await gotoBookingForSession(page, ctx, job.sessionDate);
     await bookJobThroughBasket(page, job);
     await clickConfirmAndPay(page);
     const cardPayload =
       typeof card === "function" ? { ...(await card()) } : { ...card };
-    await payWithCard(page, cardPayload);
+    await payWithCard(page, ctx, cardPayload);
     console.error(
-      `pin: payment complete — fetching gate PIN from Manage bookings (${CABER_PARK_MANAGE_BOOKINGS})`,
+      `pin: payment complete — fetching gate PIN from Manage bookings (${ctx.manageBookings})`,
     );
-    return readGatePinFromManageBookings(browser, account, job);
+    return readGatePinFromManageBookings(browser, ctx, account, job);
   } finally {
     await context.close();
   }
@@ -130,6 +133,7 @@ async function runOneJob(
  */
 export async function runBookingSession(opts: RunSessionOptions): Promise<void> {
   const cfg = loadConfig(opts.configPath);
+  const ctx = opts.venue ?? cfg.venue;
   const jobs = planMondayPresetJobs(cfg, opts.sessionDate);
   const store = new LedgerStore(LedgerStore.defaultPath());
   store.upsertFromPlannedJobs(jobs);
@@ -140,7 +144,7 @@ export async function runBookingSession(opts: RunSessionOptions): Promise<void> 
       jobs,
       store,
       getAccount: (id) => accountById(cfg, id),
-      executeJob: (job, account) => runOneJob(browser, job, account, opts.card),
+      executeJob: (job, account) => runOneJob(browser, ctx, job, account, opts.card),
       log: (line) => console.error(line),
       sessionDate: opts.sessionDate,
       skipUpsert: true,
@@ -156,6 +160,8 @@ export type RunAdHocBookingSessionOptions = {
   headless: boolean;
   /** Called at most once, when the first job reaches payment (subsequent jobs reuse the same card). */
   getCardWhenNeeded: () => Promise<CardPaymentInput>;
+  /** Per-run venue override (e.g. from CLI `--venue`). Defaults to `cfg.venue`. */
+  venue?: VenueContext;
 };
 
 /**
@@ -163,6 +169,7 @@ export type RunAdHocBookingSessionOptions = {
  */
 export async function runAdHocBookingSession(opts: RunAdHocBookingSessionOptions): Promise<void> {
   const cfg = loadConfig(opts.configPath);
+  const ctx = opts.venue ?? cfg.venue;
   const store = new LedgerStore(LedgerStore.defaultPath());
   store.upsertFromPlannedJobs(opts.jobs);
 
@@ -178,7 +185,7 @@ export async function runAdHocBookingSession(opts: RunAdHocBookingSessionOptions
       jobs: opts.jobs,
       store,
       getAccount: (id) => accountById(cfg, id),
-      executeJob: (job, account) => runOneJob(browser, job, account, getCard),
+      executeJob: (job, account) => runOneJob(browser, ctx, job, account, getCard),
       log: (line) => console.error(line),
       sessionDate: opts.jobs[0]?.sessionDate,
       skipUpsert: true,
@@ -192,6 +199,8 @@ export type DryRunBookOneSessionOptions = {
   configPath: string;
   jobs: PlannedJob[];
   headless: boolean;
+  /** Per-run venue override (e.g. from CLI `--venue`). Defaults to `cfg.venue`. */
+  venue?: VenueContext;
 };
 
 /**
@@ -199,6 +208,7 @@ export type DryRunBookOneSessionOptions = {
  */
 export async function dryRunBookOneSession(opts: DryRunBookOneSessionOptions): Promise<void> {
   const cfg = loadConfig(opts.configPath);
+  const ctx = opts.venue ?? cfg.venue;
   const browser = await chromium.launch({ headless: opts.headless });
   try {
     for (const job of opts.jobs) {
@@ -209,9 +219,9 @@ export async function dryRunBookOneSession(opts: DryRunBookOneSessionOptions): P
       const context = await browser.newContext();
       const page = await context.newPage();
       try {
-        await gotoBookingForSession(page, job.sessionDate, { role: "guest" });
+        await gotoBookingForSession(page, ctx, job.sessionDate, { role: "guest" });
         await login(page, account.username, account.password);
-        await gotoBookingForSession(page, job.sessionDate);
+        await gotoBookingForSession(page, ctx, job.sessionDate);
         await tryDismissCookieConsent(page);
         await pickSessionDateInCalendar(page, job.sessionDate);
         await clickSlotForPlannedJob(page, job);
