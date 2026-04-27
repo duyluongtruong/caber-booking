@@ -52,3 +52,23 @@ Stay within the venue’s advance window (e.g. 28 days).
 ## Design
 
 Full architecture and behavior are described under [`docs/superpowers/specs/`](docs/superpowers/specs/).
+
+## Viewer (`data/index.html`)
+
+A static React page hosted from `data/` on GitHub Pages that displays each session's court / time / PIN.
+
+| Command | Purpose |
+|---------|---------|
+| `npm run dev:viewer` | Run Vite dev server on `http://localhost:5173/` for hand-editing components |
+| `npm run build:viewer` | Build the page into `data/index.html` + `data/assets/*` (committed) |
+| `npm run preview:viewer` | Serve the built `data/` folder locally to verify before pushing |
+
+After a booking run mutates `data/ledger.json`, commit and push to refresh the public page:
+
+```bash
+git add data/ledger.json && git commit -m "data: ledger" && git push
+```
+
+GitHub Pages must be enabled in repo Settings → Pages, source `main` / `/ (root)`. The public URL is `https://<user>.github.io/tennis-booking/data/`.
+
+Source lives in `src/viewer/`. The build output (`data/index.html`, `data/assets/*`) is committed so that GitHub Pages serves it directly with no CI step.
