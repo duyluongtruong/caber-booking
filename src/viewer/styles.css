@@ -1,0 +1,198 @@
+:root {
+  --bg: #ffffff;
+  --fg: #0f172a;
+  --muted: #64748b;
+  --border: #e2e8f0;
+  --accent: #2563eb;
+  --card-bg: #ffffff;
+  --card-divider: #f1f5f9;
+  --tone-warn-bg: #fef3c7;
+  --tone-warn-fg: #92400e;
+  --tone-error-bg: #fee2e2;
+  --tone-error-fg: #991b1b;
+  --tone-muted-bg: transparent;
+  --tone-muted-fg: #64748b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f172a;
+    --fg: #e2e8f0;
+    --muted: #94a3b8;
+    --border: #1e293b;
+    --accent: #60a5fa;
+    --card-bg: #1e293b;
+    --card-divider: #0f172a;
+    --tone-warn-bg: #422006;
+    --tone-warn-fg: #fbbf24;
+    --tone-error-bg: #450a0a;
+    --tone-error-fg: #fca5a5;
+    --tone-muted-bg: transparent;
+    --tone-muted-fg: #94a3b8;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 400 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.date-bar {
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 8px 0 12px;
+  z-index: 2;
+}
+
+.date-bar .label { font-weight: 600; font-size: 16px; }
+.date-bar .today-link {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--accent);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+.date-bar input[type="date"] {
+  font: inherit;
+  color: var(--fg);
+  background: var(--border);
+  border: none;
+  border-radius: 999px;
+  padding: 6px 12px;
+}
+
+.chips {
+  position: sticky;
+  top: 56px;
+  background: var(--bg);
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 8px 0 12px;
+  z-index: 1;
+  scrollbar-width: none;
+}
+.chips::-webkit-scrollbar { display: none; }
+
+.chip {
+  flex: 0 0 auto;
+  background: var(--border);
+  color: var(--fg);
+  border: none;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.chip[aria-pressed="true"] {
+  background: var(--accent);
+  color: white;
+  font-weight: 600;
+}
+
+.court-card {
+  background: var(--card-bg);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+.court-card h2 {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 8px;
+  font-weight: 600;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  padding: 10px 0;
+  border-top: 1px solid var(--card-divider);
+}
+.row:first-of-type { border-top: none; }
+.row .time {
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+}
+.row .pin {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 600;
+  font-size: 20px;
+  letter-spacing: 0.04em;
+  color: var(--fg);
+}
+.row .pin .edited-mark {
+  font-family: -apple-system, system-ui, sans-serif;
+  font-size: 12px;
+  color: var(--muted);
+  margin-left: 4px;
+}
+
+.pill {
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  text-transform: lowercase;
+  display: inline-block;
+}
+.pill.warn  { background: var(--tone-warn-bg);  color: var(--tone-warn-fg); }
+.pill.error { background: var(--tone-error-bg); color: var(--tone-error-fg); }
+.pill.muted { background: var(--tone-muted-bg); color: var(--tone-muted-fg); border: 1px solid var(--border); }
+
+.empty {
+  text-align: center;
+  padding: 48px 16px;
+  color: var(--muted);
+}
+.empty .big { font-size: 14px; color: var(--fg); margin-bottom: 6px; }
+.empty .small { font-size: 12px; }
+.empty .small button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.skeleton {
+  background: var(--card-bg);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+.skeleton .bar {
+  height: 14px;
+  background: var(--card-divider);
+  border-radius: 4px;
+  margin: 8px 0;
+  animation: shimmer 1.4s infinite ease-in-out;
+}
+@keyframes shimmer {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.5; }
+}
