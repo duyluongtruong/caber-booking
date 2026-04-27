@@ -1,0 +1,76 @@
+{
+  "sessions": {
+    "2099-01-01": [
+      {
+        "sessionDate": "2099-01-01",
+        "courtLabel": "Court 1",
+        "start": "19:30",
+        "end": "20:00",
+        "accountId": "acc-1",
+        "jobSequence": 1,
+        "status": "confirmed",
+        "accessCode": "1234"
+      },
+      {
+        "sessionDate": "2099-01-01",
+        "courtLabel": "Court 1",
+        "start": "20:00",
+        "end": "20:30",
+        "accountId": "acc-2",
+        "jobSequence": 2,
+        "status": "confirmed",
+        "accessCode": "5678"
+      },
+      {
+        "sessionDate": "2099-01-01",
+        "courtLabel": "Court 2",
+        "start": "19:30",
+        "end": "20:00",
+        "accountId": "acc-1",
+        "jobSequence": 3,
+        "status": "pending_pin"
+      }
+    ],
+    "2099-02-01": [
+      {
+        "sessionDate": "2099-02-01",
+        "courtLabel": "Court 3",
+        "start": "10:00",
+        "end": "11:00",
+        "accountId": "acc-1",
+        "jobSequence": 1,
+        "status": "manual_override",
+        "accessCode": "9999",
+        "bookingRef": "ABC123"
+      },
+      {
+        "sessionDate": "2099-02-01",
+        "courtLabel": "Court 3",
+        "start": "11:00",
+        "end": "12:00",
+        "accountId": "acc-2",
+        "jobSequence": 2,
+        "status": "failed"
+      },
+      {
+        "sessionDate": "2099-02-01",
+        "courtLabel": "Court 3",
+        "start": "12:00",
+        "end": "13:00",
+        "accountId": "acc-3",
+        "jobSequence": 3,
+        "status": "not_started"
+      },
+      {
+        "sessionDate": "2099-02-01",
+        "courtLabel": "Court 1",
+        "start": "08:00",
+        "end": "09:00",
+        "accountId": "acc-4",
+        "jobSequence": 4,
+        "status": "confirmed"
+      }
+    ],
+    "2099-03-01": []
+  }
+}
