@@ -8,6 +8,9 @@ export default defineConfig({
   base: "./",
   build: {
     outDir: path.resolve(__dirname, "data"),
+    // MUST stay false: data/ledger.json lives next to the build output.
+    // Setting this true would silently delete the user's booking ledger on every build.
+    // prebuild:viewer (rimraf data/assets) handles cleanup of just the bundle dir.
     emptyOutDir: false,
     assetsDir: "assets",
     rollupOptions: {
