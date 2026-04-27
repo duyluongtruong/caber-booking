@@ -8,14 +8,25 @@
     "build": "tsc",
     "test": "node --test --import tsx tests/**/*.test.ts",
     "cli": "tsx src/cli.ts",
-    "codegen": "playwright codegen \"https://play.tennis.com.au/CaberParkTennisCourts/Booking/BookByDate#?role=guest\""
+    "codegen": "playwright codegen \"https://play.tennis.com.au/CaberParkTennisCourts/Booking/BookByDate#?role=guest\"",
+    "dev:viewer": "vite",
+    "prebuild:viewer": "rimraf data/assets",
+    "build:viewer": "vite build",
+    "preview:viewer": "vite preview"
   },
   "devDependencies": {
     "@playwright/test": "^1.51.0",
     "@types/node": "^25.5.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
     "commander": "^14.0.3",
     "playwright": "^1.51.0",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "rimraf": "^6.1.3",
     "tsx": "^4.19.3",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "vite": "^8.0.10"
   }
 }
