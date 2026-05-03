@@ -5,7 +5,7 @@ import path from "node:path";
 export default defineConfig({
   plugins: [react()],
   root: path.resolve(__dirname, "src/viewer"),
-  base: "./",
+  base: "/caber-booking/data/",
   build: {
     outDir: path.resolve(__dirname, "data"),
     // MUST stay false: data/ledger.json lives next to the build output.
