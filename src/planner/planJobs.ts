@@ -111,8 +111,7 @@ export function planJobs(accounts: BookingAccount[], template: SessionTemplate, 
 }
 
 /**
- * Default Caber Monday **evening** session: 3 courts, **19:30–21:30** (2h) + **21:30–22:00** each.
- * Times are **24-hour** (`19:30` = 7:30 PM). Older values `07:30` were 7:30 **AM**, not evening.
+ * Default Caber Monday **evening** session: 3 courts, **19:00–21:00** (2h) + **21:00–22:00** (1h) each.
  */
 export function defaultThreeCourtMondaySlots(
   courtLabels: [string, string, string],
@@ -122,13 +121,13 @@ export function defaultThreeCourtMondaySlots(
     blocks.push({
       courtIndex: i,
       courtLabel: courtLabels[i],
-      start: "19:30",
-      end: "21:30",
+      start: "19:00",
+      end: "21:00",
     });
     blocks.push({
       courtIndex: i,
       courtLabel: courtLabels[i],
-      start: "21:30",
+      start: "21:00",
       end: "22:00",
     });
   }

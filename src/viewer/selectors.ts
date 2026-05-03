@@ -30,14 +30,16 @@ export function sortRowsForDisplay(rows: readonly LedgerRow[]): LedgerRow[] {
 export type CourtGroup = { courtLabel: string; rows: LedgerRow[] };
 
 export function groupByCourt(rows: readonly LedgerRow[]): CourtGroup[] {
-  const groups: CourtGroup[] = [];
+  const map = new Map<string, LedgerRow[]>();
   for (const r of rows) {
-    const last = groups[groups.length - 1];
-    if (last && last.courtLabel === r.courtLabel) {
-      last.rows.push(r);
+    const existing = map.get(r.courtLabel);
+    if (existing) {
+      existing.push(r);
     } else {
-      groups.push({ courtLabel: r.courtLabel, rows: [r] });
+      map.set(r.courtLabel, [r]);
     }
   }
-  return groups;
+  return [...map.entries()]
+    .sort(([a], [b]) => a.localeCompare(b, "en", { numeric: true }))
+    .map(([courtLabel, groupRows]) => ({ courtLabel, rows: groupRows }));
 }

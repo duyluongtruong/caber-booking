@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import { mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
-import { planMondayPresetJobs, runPlannedJobsWithLedger } from "../src/runner/runSession.ts";
+import { planMondayPresetJobs, runPlannedJobsWithLedger, stdinConfirmSlotShift } from "../src/runner/runSession.ts";
+import { SlotSkippedByOperator } from "../src/adapters/clubspark/bookSlot.ts";
 import { LedgerStore, type LedgerRowPatch } from "../src/ledger/store.ts";
 import { planJobs } from "../src/planner/planJobs.ts";
 import { buildMondayThreeCourtTemplate } from "../src/mondayPlan.ts";
@@ -475,6 +476,95 @@ test("runPlannedJobsWithLedger failure marks failed row by court/time when jobSe
     assert.equal(court1.accessCode, "1111");
     assert.equal(court2.status, "failed");
   });
+});
+
+// --- SlotSkippedByOperator in runPlannedJobsWithLedger ---
+
+test("runPlannedJobsWithLedger: SlotSkippedByOperator marks job failed and continues remaining jobs", async () => {
+  await withTempLedgerPath(async (ledgerPath) => {
+    const store = new LedgerStore(ledgerPath);
+    const sessionDate = "2026-05-25";
+    const jobs: PlannedJob[] = [
+      { sequence: 1, accountId: "a", courtLabel: "Court 1", start: "19:30", end: "21:30", sessionDate },
+      { sequence: 2, accountId: "b", courtLabel: "Court 2", start: "19:30", end: "21:30", sessionDate },
+      { sequence: 3, accountId: "c", courtLabel: "Court 3", start: "19:30", end: "21:30", sessionDate },
+    ];
+    const getAccount = (id: string): ConfigAccount => ({
+      id, label: id.toUpperCase(), username: `u-${id}`, password: "p",
+    });
+
+    // Job 2 is skipped by operator; jobs 1 and 3 succeed
+    await runPlannedJobsWithLedger({
+      jobs,
+      store,
+      getAccount,
+      executeJob: async (job) => {
+        if (job.sequence === 2) throw new SlotSkippedByOperator("Court 2: operator declined shift.");
+        return "PIN";
+      },
+    });
+
+    const rows = store.getRows(sessionDate);
+    assert.equal(rows.find((r) => r.courtLabel === "Court 1")?.status, "confirmed");
+    assert.equal(rows.find((r) => r.courtLabel === "Court 2")?.status, "failed");
+    assert.equal(rows.find((r) => r.courtLabel === "Court 3")?.status, "confirmed");
+  });
+});
+
+test("runPlannedJobsWithLedger: SlotSkippedByOperator is logged and does not rethrow", async () => {
+  await withTempLedgerPath(async (ledgerPath) => {
+    const store = new LedgerStore(ledgerPath);
+    const sessionDate = "2026-05-25";
+    const jobs: PlannedJob[] = [
+      { sequence: 1, accountId: "a", courtLabel: "Court 1", start: "19:30", end: "21:30", sessionDate },
+    ];
+    const logged: string[] = [];
+
+    await runPlannedJobsWithLedger({
+      jobs,
+      store,
+      getAccount: (): ConfigAccount => ({ id: "a", label: "A", username: "u", password: "p" }),
+      executeJob: async () => { throw new SlotSkippedByOperator("Court 1: operator declined."); },
+      log: (line) => logged.push(line),
+      sessionDate,
+    });
+
+    assert.ok(logged.some((l) => l.includes("skipped by operator")), "should log skipped message");
+    const rows = store.getRows(sessionDate);
+    assert.equal(rows[0].status, "failed");
+  });
+});
+
+test("runPlannedJobsWithLedger: non-SlotSkipped error still rethrows (fatal)", async () => {
+  await withTempLedgerPath(async (ledgerPath) => {
+    const store = new LedgerStore(ledgerPath);
+    const sessionDate = "2026-05-25";
+    const jobs: PlannedJob[] = [
+      { sequence: 1, accountId: "a", courtLabel: "Court 1", start: "19:30", end: "21:30", sessionDate },
+      { sequence: 2, accountId: "b", courtLabel: "Court 2", start: "19:30", end: "21:30", sessionDate },
+    ];
+
+    await assert.rejects(
+      () => runPlannedJobsWithLedger({
+        jobs,
+        store,
+        getAccount: (id): ConfigAccount => ({ id, label: id.toUpperCase(), username: `u-${id}`, password: "p" }),
+        executeJob: async (job) => {
+          if (job.sequence === 1) throw new Error("network failure");
+          return "PIN";
+        },
+      }),
+      /network failure/,
+    );
+
+    const rows = store.getRows(sessionDate);
+    assert.equal(rows.find((r) => r.courtLabel === "Court 1")?.status, "failed");
+    assert.equal(rows.find((r) => r.courtLabel === "Court 2")?.status, "not_started");
+  });
+});
+
+test("stdinConfirmSlotShift is exported and is a function", () => {
+  assert.equal(typeof stdinConfirmSlotShift, "function");
 });
 
 test("runPlannedJobsWithLedger log does not contain PIN values even with end-of-run summary", async () => {

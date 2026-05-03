@@ -8,6 +8,7 @@ import {
   resolveOverlayEndMinutes,
   rowTextMatchesPlannedSlot,
   wallTimeToMinutesSinceMidnight,
+  SlotSkippedByOperator,
   type CourtResource,
 } from "../src/adapters/clubspark/bookSlot.ts";
 
@@ -106,4 +107,21 @@ test("resolveCourtResource reports empty map with clear message", () => {
     () => resolveCourtResource(new Map(), "Court 1"),
     /none discovered/,
   );
+});
+
+// --- SlotSkippedByOperator ---
+
+test("SlotSkippedByOperator is an Error with correct name", () => {
+  const err = new SlotSkippedByOperator("Court 3: operator declined shift from 19:30 to 20:00.");
+  assert.ok(err instanceof Error);
+  assert.ok(err instanceof SlotSkippedByOperator);
+  assert.equal(err.name, "SlotSkippedByOperator");
+  assert.match(err.message, /operator declined shift/);
+});
+
+test("SlotSkippedByOperator is distinguishable from plain Error via instanceof", () => {
+  const skipped = new SlotSkippedByOperator("skipped");
+  const plain = new Error("plain");
+  assert.ok(skipped instanceof SlotSkippedByOperator);
+  assert.ok(!(plain instanceof SlotSkippedByOperator));
 });

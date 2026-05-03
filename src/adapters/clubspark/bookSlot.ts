@@ -345,11 +345,30 @@ export function rowTextMatchesPlannedSlot(text: string, job: Pick<PlannedJob, "s
  * court via its stable `data-resource-id` GUID (discovered from `.resource` columns) and match
  * `data-test-id` exactly. If `resources` is omitted we discover them on the fly.
  */
+/**
+ * Callback invoked when a planned start slot is occupied.
+ * Receives the court label, the occupied start time, and the proposed new start time.
+ * Return `true` to accept the shift, `false` to skip this job.
+ */
+export type ConfirmSlotShift = (
+  courtLabel: string,
+  occupiedStart: string,
+  proposedStart: string,
+  end: string,
+) => Promise<boolean>;
+
+/**
+ * Minimum booking duration in minutes. A slot shift is only offered when the
+ * remaining window (proposedStart → end) is at least this long.
+ */
+const MIN_BOOKING_MINUTES = 120; // 2 hours
+
 export async function clickSlotForPlannedJob(
   page: Page,
   job: PlannedJob,
   resources?: CourtResourceMap,
-): Promise<void> {
+  confirmShift?: ConfirmSlotShift,
+): Promise<{ start: string; end: string }> {
   const map = resources ?? (await discoverCourtResources(page));
   if (map.size === 0) {
     throw new Error(
@@ -357,25 +376,72 @@ export async function clickSlotForPlannedJob(
     );
   }
   const resource = resolveCourtResource(map, job.courtLabel);
-  const startMins = wallTimeToMinutesSinceMidnight(job.start);
-  const testId = buildBookingTestId(resource.resourceId, job.sessionDate, startMins);
+  const endMins = wallTimeToMinutesSinceMidnight(job.end);
 
-  const bookable = page.locator(`a.book-interval.not-booked[data-test-id="${testId}"]`);
-  if ((await bookable.count()) > 0) {
-    await bookable.first().click();
-    return;
+  let startMins = wallTimeToMinutesSinceMidnight(job.start);
+
+  while (true) {
+    const testId = buildBookingTestId(resource.resourceId, job.sessionDate, startMins);
+    const bookable = page.locator(`a.book-interval.not-booked[data-test-id="${testId}"]`);
+
+    if ((await bookable.count()) > 0) {
+      await bookable.first().click();
+      return { start: minutesSinceMidnightToHHmm(startMins), end: job.end };
+    }
+
+    // Distinguish occupied ("cell exists but not .not-booked") from "no cell at all"
+    const anyAnchor = page.locator(`a.book-interval[data-test-id="${testId}"]`);
+    const isOccupied = (await anyAnchor.count()) > 0;
+
+    if (!isOccupied) {
+      // No cell at all — outside grid hours, closure, etc. Not a shift candidate.
+      throw new Error(
+        `${job.courtLabel} at ${minutesSinceMidnightToHHmm(startMins)} on ${job.sessionDate}: no 30-min cell in grid (likely inside an existing booking block, closure, or outside grid hours).`,
+      );
+    }
+
+    // Slot is occupied — check if we can shift +30 min and still meet minimum duration
+    const nextStartMins = startMins + 30;
+    const remainingMins = endMins - nextStartMins;
+
+    if (remainingMins < MIN_BOOKING_MINUTES) {
+      throw new Error(
+        `${job.courtLabel} at ${minutesSinceMidnightToHHmm(startMins)} on ${job.sessionDate} is occupied, and shifting start to ${minutesSinceMidnightToHHmm(nextStartMins)} would leave only ${remainingMins} min (< ${MIN_BOOKING_MINUTES} min minimum).`,
+      );
+    }
+
+    if (!confirmShift) {
+      throw new Error(
+        `${job.courtLabel} at ${minutesSinceMidnightToHHmm(startMins)} on ${job.sessionDate} is not bookable (already booked or outside release window).`,
+      );
+    }
+
+    const accepted = await confirmShift(
+      job.courtLabel,
+      minutesSinceMidnightToHHmm(startMins),
+      minutesSinceMidnightToHHmm(nextStartMins),
+      job.end,
+    );
+
+    if (!accepted) {
+      throw new SlotSkippedByOperator(
+        `${job.courtLabel}: operator declined shift from ${minutesSinceMidnightToHHmm(startMins)} to ${minutesSinceMidnightToHHmm(nextStartMins)}.`,
+      );
+    }
+
+    startMins = nextStartMins;
   }
+}
 
-  // Distinguish "cell exists but not bookable" (anchor without `not-booked`) from "no cell at all"
-  // (inside a multi-slot booking block, court closure, or outside grid hours). The former maps to
-  // already-booked/released; the latter to structural grid state.
-  const anyAnchor = page.locator(`a.book-interval[data-test-id="${testId}"]`);
-  const hasUnbookable = (await anyAnchor.count()) > 0;
-  throw new Error(
-    hasUnbookable
-      ? `${job.courtLabel} at ${job.start} on ${job.sessionDate} is not bookable (already booked or outside release window).`
-      : `${job.courtLabel} at ${job.start} on ${job.sessionDate}: no 30-min cell in grid (likely inside an existing booking block, closure, or outside grid hours).`,
-  );
+/**
+ * Thrown when the operator declines a slot shift. Callers should mark the job
+ * as failed and continue with remaining jobs (do not rethrow as fatal).
+ */
+export class SlotSkippedByOperator extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SlotSkippedByOperator";
+  }
 }
 
 /**
@@ -497,11 +563,17 @@ export async function clickConfirmAndPay(page: Page): Promise<void> {
  * Full path after you are already on the booking URL and signed in:
  * cookie → calendar → discover courts → slot → basket (no payment).
  */
-export async function bookJobThroughBasket(page: Page, job: PlannedJob): Promise<void> {
+export async function bookJobThroughBasket(
+  page: Page,
+  job: PlannedJob,
+  confirmShift?: ConfirmSlotShift,
+): Promise<void> {
   await tryDismissCookieConsent(page);
   await pickSessionDateInCalendar(page, job.sessionDate);
   const resources = await discoverCourtResources(page);
-  await clickSlotForPlannedJob(page, job, resources);
-  await completeBookingDurationOverlay(page, job);
+  const { start: actualStart } = await clickSlotForPlannedJob(page, job, resources, confirmShift);
+  // Pass the (possibly shifted) start to the duration overlay so end time stays the same.
+  const effectiveJob = actualStart !== job.start ? { ...job, start: actualStart } : job;
+  await completeBookingDurationOverlay(page, effectiveJob);
   await proceedThroughTermsToBasket(page);
 }

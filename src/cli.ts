@@ -78,7 +78,7 @@ program.addCommand(configCmd);
 program
   .command("dry-run")
   .description(
-    "Plan Monday 19:30–22:00 (3 courts); open browser and walk the first planned job through basket only (no payment)",
+    "Plan Monday 19:00–22:00 (3 courts); open browser and walk the first planned job through basket only (no payment)",
   )
   .option("-d, --date <yyyy-mm-dd>", "Session date (overrides --weeks)")
   .option(
@@ -186,7 +186,7 @@ program
 program
   .command("run")
   .description(
-    "Plan Monday 19:30–22:00 for Court 1–3; run every planned job (separate login/checkout each — multiple card charges)",
+    "Plan Monday 19:00–22:00 for Court 1–3; run every planned job (separate login/checkout each — multiple card charges)",
   )
   .option("-d, --date <yyyy-mm-dd>", "Session date (overrides --weeks)")
   .option(
