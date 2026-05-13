@@ -208,3 +208,109 @@ test("ledger: upsert same court/time different account resets status and accessC
     assert.equal(rows[0].bookingRef, undefined);
   });
 });
+
+// --- countActiveBookingsByAccount ---
+
+test("countActiveBookingsByAccount: confirmed/pending_pin/manual_override count, others don't", () => {
+  withTempDir((dir) => {
+    const store = new LedgerStore(path.join(dir, "ledger.json"));
+    store.upsertFromPlannedJobs([
+      { sequence: 1, accountId: "1", courtLabel: "Court 1", start: "19:00", end: "21:00", sessionDate: "2026-06-01" },
+      { sequence: 2, accountId: "2", courtLabel: "Court 2", start: "19:00", end: "21:00", sessionDate: "2026-06-01" },
+    ]);
+    store.upsertFromPlannedJobs([
+      { sequence: 3, accountId: "1", courtLabel: "Court 1", start: "19:00", end: "21:00", sessionDate: "2026-06-08" },
+      { sequence: 4, accountId: "1", courtLabel: "Court 2", start: "19:00", end: "21:00", sessionDate: "2026-06-08" },
+    ]);
+    store.updateRow("2026-06-01", 1, { status: "confirmed" });
+    store.updateRow("2026-06-01", 2, { status: "pending_pin" });
+    store.updateRow("2026-06-08", 3, { status: "manual_override" });
+    store.updateRow("2026-06-08", 4, { status: "failed" });
+
+    const counts = store.countActiveBookingsByAccount({ today: "2026-05-12" });
+    assert.equal(counts.get("1"), 2, "1 has confirmed (06-01) + manual_override (06-08); failed not counted");
+    assert.equal(counts.get("2"), 1, "2 has pending_pin (06-01)");
+  });
+});
+
+test("countActiveBookingsByAccount: not_started rows are not counted", () => {
+  withTempDir((dir) => {
+    const store = new LedgerStore(path.join(dir, "ledger.json"));
+    store.upsertFromPlannedJobs([
+      { sequence: 1, accountId: "1", courtLabel: "Court 1", start: "19:00", end: "21:00", sessionDate: "2026-06-15" },
+    ]);
+    const counts = store.countActiveBookingsByAccount({ today: "2026-05-12" });
+    assert.equal(counts.get("1") ?? 0, 0, "fresh not_started row should not count");
+  });
+});
+
+test("countActiveBookingsByAccount: past sessions drop out as today advances", () => {
+  withTempDir((dir) => {
+    const store = new LedgerStore(path.join(dir, "ledger.json"));
+    store.upsertFromPlannedJobs([
+      { sequence: 1, accountId: "1", courtLabel: "Court 1", start: "19:00", end: "21:00", sessionDate: "2026-05-25" },
+    ]);
+    store.upsertFromPlannedJobs([
+      { sequence: 1, accountId: "1", courtLabel: "Court 1", start: "19:00", end: "21:00", sessionDate: "2026-06-01" },
+    ]);
+    store.updateRow("2026-05-25", 1, { status: "confirmed" });
+    store.updateRow("2026-06-01", 1, { status: "confirmed" });
+
+    assert.equal(
+      store.countActiveBookingsByAccount({ today: "2026-05-12" }).get("1"),
+      2,
+      "today=2026-05-12: both sessions still future",
+    );
+    assert.equal(
+      store.countActiveBookingsByAccount({ today: "2026-05-25" }).get("1"),
+      2,
+      "today=2026-05-25: same-day session still active (sessionDate >= today)",
+    );
+    assert.equal(
+      store.countActiveBookingsByAccount({ today: "2026-05-26" }).get("1"),
+      1,
+      "today=2026-05-26: 05-25 has played out; only 06-01 still active",
+    );
+    assert.equal(
+      store.countActiveBookingsByAccount({ today: "2026-06-02" }).get("1") ?? 0,
+      0,
+      "today=2026-06-02: both sessions played out",
+    );
+  });
+});
+
+test("countActiveBookingsByAccount: excludeSessionDate omits a re-planned date so it doesn't double-count", () => {
+  withTempDir((dir) => {
+    const store = new LedgerStore(path.join(dir, "ledger.json"));
+    store.upsertFromPlannedJobs([
+      { sequence: 1, accountId: "1", courtLabel: "Court 1", start: "19:00", end: "21:00", sessionDate: "2026-06-01" },
+    ]);
+    store.upsertFromPlannedJobs([
+      { sequence: 1, accountId: "1", courtLabel: "Court 1", start: "19:00", end: "21:00", sessionDate: "2026-06-08" },
+    ]);
+    store.updateRow("2026-06-01", 1, { status: "confirmed" });
+    store.updateRow("2026-06-08", 1, { status: "confirmed" });
+
+    assert.equal(
+      store.countActiveBookingsByAccount({ today: "2026-05-12" }).get("1"),
+      2,
+    );
+    assert.equal(
+      store.countActiveBookingsByAccount({ today: "2026-05-12", excludeSessionDate: "2026-06-08" }).get("1"),
+      1,
+      "the session being re-planned must not count toward its own cap",
+    );
+  });
+});
+
+test("countActiveBookingsByAccount: rejects malformed dates", () => {
+  withTempDir((dir) => {
+    const store = new LedgerStore(path.join(dir, "ledger.json"));
+    assert.throws(() => store.countActiveBookingsByAccount({ today: "2026-6-1" }), /YYYY-MM-DD/);
+    assert.throws(() => store.countActiveBookingsByAccount({ today: "2026-06" }), /YYYY-MM-DD/);
+    assert.throws(
+      () => store.countActiveBookingsByAccount({ today: "2026-06-01", excludeSessionDate: "bad" }),
+      /YYYY-MM-DD/,
+    );
+  });
+});

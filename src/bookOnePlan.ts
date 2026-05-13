@@ -12,6 +12,8 @@ export type BookOnePlanInput = {
   start?: string;
   end?: string;
   accountId?: string;
+  /** Prior active future bookings per account — enforces the venue's total active-booking cap. */
+  priorActiveBookings?: ReadonlyMap<string, number>;
 };
 
 /**
@@ -75,11 +77,15 @@ export function planBookOneJobs(cfg: LoadedConfig, input: BookOnePlanInput): Pla
     mode: "real",
   });
 
-  const planOpts = input.accountId !== undefined && input.accountId.length > 0
-    ? { accountId: input.accountId }
-    : undefined;
+  const planOpts: Parameters<typeof planJobs>[2] = {};
+  if (input.accountId !== undefined && input.accountId.length > 0) {
+    planOpts.accountId = input.accountId;
+  }
+  if (input.priorActiveBookings !== undefined) {
+    planOpts.priorActiveBookings = input.priorActiveBookings;
+  }
 
-  return planJobs(cfg.accounts, template, planOpts);
+  return planJobs(cfg.accounts, template, Object.keys(planOpts).length > 0 ? planOpts : undefined);
 }
 
 /** True when the requested wall-clock span is strictly longer than two hours (split visibility). */

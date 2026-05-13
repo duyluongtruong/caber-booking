@@ -358,10 +358,12 @@ export type ConfirmSlotShift = (
 ) => Promise<boolean>;
 
 /**
- * Minimum booking duration in minutes. A slot shift is only offered when the
- * remaining window (proposedStart → end) is at least this long.
+ * Minimum booking duration in minutes. A slot shift is only offered when the remaining window
+ * (proposedStart → end) is at least this long. 90 min (= 1.5h) lets the shift loop accept e.g.
+ * a 19:30–21:00 fallback for a planned 19:00–21:00 slot when the first 30 min is occupied;
+ * smaller fallbacks (60 / 30 min) are rejected as not worth the booking.
  */
-const MIN_BOOKING_MINUTES = 120; // 2 hours
+const MIN_BOOKING_MINUTES = 90;
 
 export async function clickSlotForPlannedJob(
   page: Page,
@@ -389,29 +391,33 @@ export async function clickSlotForPlannedJob(
       return { start: minutesSinceMidnightToHHmm(startMins), end: job.end };
     }
 
-    // Distinguish occupied ("cell exists but not .not-booked") from "no cell at all"
-    const anyAnchor = page.locator(`a.book-interval[data-test-id="${testId}"]`);
-    const isOccupied = (await anyAnchor.count()) > 0;
-
-    if (!isOccupied) {
-      // No cell at all — outside grid hours, closure, etc. Not a shift candidate.
-      throw new Error(
-        `${job.courtLabel} at ${minutesSinceMidnightToHHmm(startMins)} on ${job.sessionDate}: no 30-min cell in grid (likely inside an existing booking block, closure, or outside grid hours).`,
+    // No bookable anchor at this start. Two indistinguishable-on-the-page reasons:
+    //   1) cell exists but is `.book-interval` without `.not-booked` (booked at exactly this slice), or
+    //   2) cell is covered by a multi-cell booking block — Clubspark omits the anchor entirely.
+    // Both mean "occupied" → try shifting +30. We still guard against a totally unrendered grid by
+    // requiring this court column to have *some* bookable anchor for the day; otherwise the loop
+    // would shift uselessly until the duration floor throws a misleading error.
+    const courtHasAnyBookable = await page
+      .locator(`a.book-interval.not-booked[data-test-id^="booking-${resource.resourceId}|${job.sessionDate}|"]`)
+      .first()
+      .count();
+    if (courtHasAnyBookable === 0) {
+      throw new SlotUnavailable(
+        `${job.courtLabel} on ${job.sessionDate}: no bookable cells in grid for this court (closure, outside release window, or grid did not render).`,
       );
     }
 
-    // Slot is occupied — check if we can shift +30 min and still meet minimum duration
     const nextStartMins = startMins + 30;
     const remainingMins = endMins - nextStartMins;
 
     if (remainingMins < MIN_BOOKING_MINUTES) {
-      throw new Error(
+      throw new SlotUnavailable(
         `${job.courtLabel} at ${minutesSinceMidnightToHHmm(startMins)} on ${job.sessionDate} is occupied, and shifting start to ${minutesSinceMidnightToHHmm(nextStartMins)} would leave only ${remainingMins} min (< ${MIN_BOOKING_MINUTES} min minimum).`,
       );
     }
 
     if (!confirmShift) {
-      throw new Error(
+      throw new SlotUnavailable(
         `${job.courtLabel} at ${minutesSinceMidnightToHHmm(startMins)} on ${job.sessionDate} is not bookable (already booked or outside release window).`,
       );
     }
@@ -441,6 +447,19 @@ export class SlotSkippedByOperator extends Error {
   constructor(message: string) {
     super(message);
     this.name = "SlotSkippedByOperator";
+  }
+}
+
+/**
+ * Thrown when a specific planned slot can't be booked for reasons local to that slot
+ * (already occupied with no room to shift, court column has no bookable cells, no
+ * shift callback wired but slot blocked). Other jobs in the same run are unaffected,
+ * so callers should mark this job failed and continue.
+ */
+export class SlotUnavailable extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SlotUnavailable";
   }
 }
 

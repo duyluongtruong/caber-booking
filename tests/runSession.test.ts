@@ -3,7 +3,12 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import { mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
-import { planMondayPresetJobs, runPlannedJobsWithLedger, stdinConfirmSlotShift } from "../src/runner/runSession.ts";
+import {
+  planMondayPresetJobs,
+  runPlannedJobsWithLedger,
+  stdinConfirmSlotShift,
+  todayAtVenueISO,
+} from "../src/runner/runSession.ts";
 import { SlotSkippedByOperator } from "../src/adapters/clubspark/bookSlot.ts";
 import { LedgerStore, type LedgerRowPatch } from "../src/ledger/store.ts";
 import { planJobs } from "../src/planner/planJobs.ts";
@@ -611,4 +616,23 @@ test("runPlannedJobsWithLedger log does not contain PIN values even with end-of-
     assert.match(all, /confirmed/, "summary should include status counts");
     assert.match(all, /pending_pin/, "summary should include status counts");
   });
+});
+
+// --- todayAtVenueISO ---
+
+test("todayAtVenueISO: formats Sydney-local date as YYYY-MM-DD", () => {
+  // 2026-05-12T01:00:00Z is 11:00 AEST on 2026-05-12 (Sydney is UTC+10 in May, not DST).
+  const t = todayAtVenueISO(new Date("2026-05-12T01:00:00Z"));
+  assert.equal(t, "2026-05-12");
+});
+
+test("todayAtVenueISO: UTC date and Sydney date can differ near midnight UTC", () => {
+  // 2026-05-12T15:00:00Z is 01:00 the next day (2026-05-13) in Sydney (AEST UTC+10).
+  const t = todayAtVenueISO(new Date("2026-05-12T15:00:00Z"));
+  assert.equal(t, "2026-05-13", "Sydney is ahead of UTC; this must roll over to the next day");
+});
+
+test("todayAtVenueISO: with no argument returns today (smoke test, format only)", () => {
+  const t = todayAtVenueISO();
+  assert.match(t, /^\d{4}-\d{2}-\d{2}$/, "must be YYYY-MM-DD");
 });

@@ -14,7 +14,9 @@ import {
   pickSessionDateInCalendar,
   proceedThroughTermsToBasket,
   SlotSkippedByOperator,
+  SlotUnavailable,
   tryDismissCookieConsent,
+  wallTimeToMinutesSinceMidnight,
 } from "../adapters/clubspark/bookSlot.js";
 import { readGatePinFromManageBookings } from "../adapters/clubspark/manageBookingsPin.js";
 import { payWithCard, type CardPaymentInput } from "../adapters/clubspark/pay.js";
@@ -32,10 +34,14 @@ export async function stdinConfirmSlotShift(
   proposedStart: string,
   end: string,
 ): Promise<boolean> {
+  const remainingMins = wallTimeToMinutesSinceMidnight(end) - wallTimeToMinutesSinceMidnight(proposedStart);
+  const h = Math.floor(remainingMins / 60);
+  const m = remainingMins % 60;
+  const durationLabel = m === 0 ? `${h}h` : h === 0 ? `${m}m` : `${h}h${m}m`;
   const rl = createInterface({ input: process.stdin, output: process.stderr });
   return new Promise((resolve) => {
     rl.question(
-      `\n⚠️  ${courtLabel} at ${occupiedStart} is occupied.\n   Shift start to ${proposedStart} (end stays ${end}, booking ≥ 2h)? [y/N] `,
+      `\n⚠️  ${courtLabel} at ${occupiedStart} is occupied.\n   Shift start to ${proposedStart} (end stays ${end}, booking will be ${durationLabel} / ${remainingMins} min)? [y/N] `,
       (answer) => {
         rl.close();
         resolve(answer.trim().toLowerCase() === "y");
@@ -53,10 +59,29 @@ export type RunSessionOptions = {
   venue?: VenueContext;
 };
 
-/** Monday preset: same jobs as `planJobs(accounts, buildMondayThreeCourtTemplate(sessionDate))`. */
-export function planMondayPresetJobs(cfg: LoadedConfig, sessionDate: string): PlannedJob[] {
+/**
+ * Monday preset: same jobs as `planJobs(accounts, buildMondayThreeCourtTemplate(sessionDate))`.
+ * When `priorActiveBookings` is provided it is forwarded to the planner so the venue's total
+ * active-booking cap is enforced. Pass the result of
+ * {@link LedgerStore.countActiveBookingsByAccount} with `excludeSessionDate: sessionDate` so
+ * a re-plan for the same date doesn't double-count its own rows.
+ */
+export function planMondayPresetJobs(
+  cfg: LoadedConfig,
+  sessionDate: string,
+  priorActiveBookings?: ReadonlyMap<string, number>,
+): PlannedJob[] {
   const template = buildMondayThreeCourtTemplate(sessionDate);
-  return planJobs(cfg.accounts, template);
+  return planJobs(cfg.accounts, template, priorActiveBookings ? { priorActiveBookings } : undefined);
+}
+
+/**
+ * Today as `YYYY-MM-DD` in the venue's timezone (Australia/Sydney). Uses `en-CA` because that
+ * locale already formats dates as `YYYY-MM-DD`. Used by the runner to query the ledger for
+ * active-future bookings (sessionDate >= today).
+ */
+export function todayAtVenueISO(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Australia/Sydney" }).format(now);
 }
 
 export type PlannedJobExecutor = (job: PlannedJob, account: ConfigAccount) => Promise<string | null>;
@@ -106,6 +131,10 @@ export async function runPlannedJobsWithLedger(options: RunPlannedJobsWithLedger
         log?.(`run: job ${job.sequence} skipped by operator — ${msg}`);
         continue;
       }
+      if (e instanceof SlotUnavailable) {
+        log?.(`run: job ${job.sequence} skipped — slot unavailable: ${msg}`);
+        continue;
+      }
       throw e;
     }
     store.updateRowForPlannedJob(job, {
@@ -151,6 +180,17 @@ async function runOneJob(
     const cardPayload =
       typeof card === "function" ? { ...(await card()) } : { ...card };
     await payWithCard(page, ctx, cardPayload);
+
+    // If the account has a known stable gate PIN configured, use it directly. Caber Park
+    // (and most Clubspark venues) issue a per-account PIN that does not change per booking,
+    // so the second-context login + Manage bookings navigation is pure overhead. Fall back
+    // to scraping only when no accessCode is configured for this account.
+    if (account.accessCode !== undefined) {
+      console.error(
+        `pin: using configured accessCode for ${account.label} (${account.username}) — skipping Manage bookings scrape`,
+      );
+      return account.accessCode;
+    }
     console.error(
       `pin: payment complete — fetching gate PIN from Manage bookings (${ctx.manageBookings})`,
     );
@@ -168,8 +208,19 @@ async function runOneJob(
 export async function runBookingSession(opts: RunSessionOptions): Promise<void> {
   const cfg = loadConfig(opts.configPath);
   const ctx = opts.venue ?? cfg.venue;
-  const jobs = planMondayPresetJobs(cfg, opts.sessionDate);
   const store = new LedgerStore(LedgerStore.defaultPath());
+  const today = todayAtVenueISO();
+  const priorActive = store.countActiveBookingsByAccount({
+    today,
+    excludeSessionDate: opts.sessionDate,
+  });
+  const jobs = planMondayPresetJobs(cfg, opts.sessionDate, priorActive);
+  if (priorActive.size > 0) {
+    const parts = [...priorActive.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([id, n]) => `${id}=${n}`);
+    console.error(`plan: prior active bookings by account (sessionDate >= ${today}, excluding ${opts.sessionDate}) — ${parts.join(", ")}`);
+  }
   store.upsertFromPlannedJobs(jobs);
 
   const browser = await chromium.launch({ headless: opts.headless });
@@ -275,6 +326,8 @@ export async function dryRunBookOneSession(opts: DryRunBookOneSessionOptions): P
       } catch (e) {
         if (e instanceof SlotSkippedByOperator) {
           console.error(`book-one dry-run: job ${job.sequence} skipped by operator — ${e.message}`);
+        } else if (e instanceof SlotUnavailable) {
+          console.error(`book-one dry-run: job ${job.sequence} skipped — slot unavailable: ${e.message}`);
         } else {
           throw e;
         }

@@ -9,6 +9,11 @@ import type {
 
 const DEFAULT_MAX_BOOKINGS = 2;
 const DEFAULT_MAX_HOURS = 2;
+/**
+ * Caber Park: each account may hold at most 5 active bookings (sessions still in the future).
+ * Past sessions drop out automatically as they play out; the cap is rolling, not monthly.
+ */
+export const DEFAULT_MAX_ACTIVE_BOOKINGS = 5;
 
 function slotDurationHours(slot: TemplateSlot): number {
   const a = timeToMinutes(slot.start);
@@ -79,22 +84,38 @@ export function planJobs(accounts: BookingAccount[], template: SessionTemplate, 
   type Assigned = { slot: TemplateSlot; accountId: string };
   const assigned: Assigned[] = [];
 
+  const priorActive = opts?.priorActiveBookings;
+
   for (const slot of slots) {
     let picked: BookingAccount | undefined;
+    const skipReasons: string[] = [];
     for (const acc of active) {
       const cap = acc.maxBookingsPerDay ?? DEFAULT_MAX_BOOKINGS;
       const mine = assigned.filter((x) => x.accountId === acc.id);
-      if (mine.length >= cap) continue;
+      if (mine.length >= cap) {
+        skipReasons.push(`${acc.id}: daily cap ${mine.length}/${cap}`);
+        continue;
+      }
+      const activeCap = acc.maxActiveBookings ?? DEFAULT_MAX_ACTIVE_BOOKINGS;
+      const prior = priorActive?.get(acc.id) ?? 0;
+      if (prior + mine.length >= activeCap) {
+        skipReasons.push(`${acc.id}: active-booking cap ${prior + mine.length}/${activeCap}`);
+        continue;
+      }
       const slotForAcc = mine.map((x) => x.slot);
-      if (slotForAcc.some((s) => overlaps(s, slot))) continue;
+      if (slotForAcc.some((s) => overlaps(s, slot))) {
+        skipReasons.push(`${acc.id}: overlaps existing assignment`);
+        continue;
+      }
       picked = acc;
       break;
     }
     if (!picked) {
+      const detail = skipReasons.length > 0 ? ` (${skipReasons.join("; ")})` : "";
       throw new Error(
         opts?.accountId
-          ? `Cannot assign all slots to account "${opts.accountId}"`
-          : "Not enough account capacity or overlapping limits: cannot assign all slots",
+          ? `Cannot assign all slots to account "${opts.accountId}"${detail}`
+          : `Not enough account capacity or overlapping limits: cannot assign slot ${slot.courtLabel} ${slot.start}-${slot.end}${detail}`,
       );
     }
     assigned.push({ slot, accountId: picked.id });

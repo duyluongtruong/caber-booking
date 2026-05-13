@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { planJobs, defaultThreeCourtMondaySlots } from "../src/planner/planJobs.ts";
+import {
+  DEFAULT_MAX_ACTIVE_BOOKINGS,
+  defaultThreeCourtMondaySlots,
+  planJobs,
+} from "../src/planner/planJobs.ts";
 import type { BookingAccount, SessionTemplate } from "../src/planner/types.ts";
 
 const courts = ["Court 1", "Court 2", "Court 3"] as [string, string, string];
@@ -196,3 +200,81 @@ function toMin(t: string): number {
   const [h, m] = t.split(":").map(Number);
   return h * 60 + m;
 }
+
+// --- Active-booking cap (Caber Park: 6 simultaneously-active bookings per account) ---
+
+test("priorActiveBookings: account at active-booking cap is skipped, planner falls back to next", () => {
+  const accounts: BookingAccount[] = [
+    { id: "a", label: "A" },
+    { id: "b", label: "B" },
+  ];
+  const template: SessionTemplate = {
+    sessionDate: "2026-06-15",
+    slots: [{ courtIndex: 0, courtLabel: "Court 1", start: "19:30", end: "21:30" }],
+    maxHoursPerBooking: 2,
+  };
+  const prior = new Map([["a", DEFAULT_MAX_ACTIVE_BOOKINGS]]);
+  const jobs = planJobs(accounts, template, { priorActiveBookings: prior });
+  assert.equal(jobs.length, 1);
+  assert.equal(jobs[0].accountId, "b");
+});
+
+test("priorActiveBookings: planner counts in-plan assignments against the active cap too", () => {
+  const accounts: BookingAccount[] = [
+    { id: "a", label: "A" },
+    { id: "b", label: "B" },
+  ];
+  const template: SessionTemplate = {
+    sessionDate: "2026-06-15",
+    slots: [
+      { courtIndex: 0, courtLabel: "Court 1", start: "19:30", end: "21:30" },
+      { courtIndex: 0, courtLabel: "Court 1", start: "21:30", end: "22:00" },
+    ],
+    maxHoursPerBooking: 2,
+  };
+  const prior = new Map([["a", 4]]);
+  const jobs = planJobs(accounts, template, { priorActiveBookings: prior });
+  assert.equal(jobs.length, 2);
+  assert.equal(jobs[0].accountId, "a");
+  assert.equal(jobs[1].accountId, "b", "a hits 5/5 after first assignment; b takes the second");
+});
+
+test("priorActiveBookings: error message names the active-booking cap when no account fits", () => {
+  const accounts: BookingAccount[] = [{ id: "a", label: "A" }];
+  const template: SessionTemplate = {
+    sessionDate: "2026-06-15",
+    slots: [{ courtIndex: 0, courtLabel: "Court 1", start: "19:30", end: "21:30" }],
+    maxHoursPerBooking: 2,
+  };
+  const prior = new Map([["a", DEFAULT_MAX_ACTIVE_BOOKINGS]]);
+  assert.throws(
+    () => planJobs(accounts, template, { priorActiveBookings: prior }),
+    /active-booking cap 5\/5/,
+  );
+});
+
+test("priorActiveBookings: per-account maxActiveBookings overrides default", () => {
+  const accounts: BookingAccount[] = [
+    { id: "a", label: "A", maxActiveBookings: 2 },
+    { id: "b", label: "B" },
+  ];
+  const template: SessionTemplate = {
+    sessionDate: "2026-06-15",
+    slots: [{ courtIndex: 0, courtLabel: "Court 1", start: "19:30", end: "21:30" }],
+    maxHoursPerBooking: 2,
+  };
+  const prior = new Map([["a", 2]]);
+  const jobs = planJobs(accounts, template, { priorActiveBookings: prior });
+  assert.equal(jobs[0].accountId, "b", "a is at its custom cap of 2, falls back to b");
+});
+
+test("priorActiveBookings: missing key for an account is treated as 0", () => {
+  const accounts: BookingAccount[] = [{ id: "a", label: "A" }];
+  const template: SessionTemplate = {
+    sessionDate: "2026-06-15",
+    slots: [{ courtIndex: 0, courtLabel: "Court 1", start: "19:30", end: "21:30" }],
+    maxHoursPerBooking: 2,
+  };
+  const jobs = planJobs(accounts, template, { priorActiveBookings: new Map() });
+  assert.equal(jobs[0].accountId, "a");
+});

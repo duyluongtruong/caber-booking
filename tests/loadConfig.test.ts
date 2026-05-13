@@ -114,6 +114,90 @@ test("loadConfig: falls back to default slug when neither venueSlug nor parseabl
   );
 });
 
+test("loadConfig: loads accessCode when set to a real value", () => {
+  withTempConfig(
+    {
+      accounts: [
+        { id: "1", label: "A", username: "u", password: "p", accessCode: "3414" },
+        { id: "2", label: "B", username: "u2", password: "p2" },
+      ],
+    },
+    (p) => {
+      const cfg = loadConfig(p);
+      const a = cfg.accounts.find((x) => x.id === "1")!;
+      const b = cfg.accounts.find((x) => x.id === "2")!;
+      assert.equal(a.accessCode, "3414");
+      assert.equal(b.accessCode, undefined, "missing accessCode stays undefined");
+    },
+  );
+});
+
+test("loadConfig: drops accessCode placeholder 'REPLACE_ME' (treated as not set)", () => {
+  withTempConfig(
+    {
+      accounts: [
+        { id: "1", label: "A", username: "u", password: "p", accessCode: "REPLACE_ME" },
+      ],
+    },
+    (p) => {
+      const cfg = loadConfig(p);
+      assert.equal(cfg.accounts[0]!.accessCode, undefined);
+    },
+  );
+});
+
+test("loadConfig: loads maxActiveBookings when set; absent leaves it undefined (planner uses default 6)", () => {
+  withTempConfig(
+    {
+      accounts: [
+        { id: "1", label: "A", username: "u", password: "p", maxActiveBookings: 4 },
+        { id: "2", label: "B", username: "u2", password: "p2" },
+      ],
+    },
+    (p) => {
+      const cfg = loadConfig(p);
+      assert.equal(cfg.accounts.find((a) => a.id === "1")!.maxActiveBookings, 4);
+      assert.equal(cfg.accounts.find((a) => a.id === "2")!.maxActiveBookings, undefined);
+    },
+  );
+});
+
+test("loadConfig: rejects non-numeric or negative maxActiveBookings", () => {
+  withTempConfig(
+    {
+      accounts: [
+        { id: "1", label: "A", username: "u", password: "p", maxActiveBookings: -1 },
+      ],
+    },
+    (p) => {
+      assert.throws(() => loadConfig(p), /maxActiveBookings must be a non-negative finite number/);
+    },
+  );
+  withTempConfig(
+    {
+      accounts: [
+        { id: "1", label: "A", username: "u", password: "p", maxActiveBookings: "six" },
+      ],
+    },
+    (p) => {
+      assert.throws(() => loadConfig(p), /maxActiveBookings must be a non-negative finite number/);
+    },
+  );
+});
+
+test("loadConfig: rejects empty-string accessCode", () => {
+  withTempConfig(
+    {
+      accounts: [
+        { id: "1", label: "A", username: "u", password: "p", accessCode: "" },
+      ],
+    },
+    (p) => {
+      assert.throws(() => loadConfig(p), /accessCode must be a non-empty string/);
+    },
+  );
+});
+
 test("loadConfig: rejects venueSlug with URL-unsafe characters", () => {
   withTempConfig(
     {

@@ -9,6 +9,7 @@ import {
   rowTextMatchesPlannedSlot,
   wallTimeToMinutesSinceMidnight,
   SlotSkippedByOperator,
+  SlotUnavailable,
   type CourtResource,
 } from "../src/adapters/clubspark/bookSlot.ts";
 
@@ -124,4 +125,23 @@ test("SlotSkippedByOperator is distinguishable from plain Error via instanceof",
   const plain = new Error("plain");
   assert.ok(skipped instanceof SlotSkippedByOperator);
   assert.ok(!(plain instanceof SlotSkippedByOperator));
+});
+
+// --- SlotUnavailable ---
+
+test("SlotUnavailable is an Error with correct name", () => {
+  const err = new SlotUnavailable("Court 1 at 19:00 on 2026-06-08 is occupied, and shifting start to 19:30 would leave only 90 min (< 150 min minimum).");
+  assert.ok(err instanceof Error);
+  assert.ok(err instanceof SlotUnavailable);
+  assert.equal(err.name, "SlotUnavailable");
+  assert.match(err.message, /is occupied/);
+});
+
+test("SlotUnavailable and SlotSkippedByOperator are not interchangeable", () => {
+  const unavailable = new SlotUnavailable("unavailable");
+  const skipped = new SlotSkippedByOperator("skipped");
+  assert.ok(unavailable instanceof SlotUnavailable);
+  assert.ok(!(unavailable instanceof SlotSkippedByOperator));
+  assert.ok(skipped instanceof SlotSkippedByOperator);
+  assert.ok(!(skipped instanceof SlotUnavailable));
 });

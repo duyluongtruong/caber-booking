@@ -8,7 +8,16 @@ import {
   type VenueContext,
 } from "./adapters/clubspark/selectors.js";
 
-export type ConfigAccount = BookingAccount & { username: string; password: string };
+export type ConfigAccount = BookingAccount & {
+  username: string;
+  password: string;
+  /**
+   * Stable gate access PIN for this account. When present, the runner uses it directly
+   * to populate the ledger and skips the post-payment `readGatePinFromManageBookings`
+   * navigation. Leave unset to fall back to scraping the PIN from Manage bookings.
+   */
+  accessCode?: string;
+};
 
 export type LoadedConfig = {
   venueBaseUrl?: string;
@@ -151,6 +160,27 @@ export function loadConfig(filePath: string): LoadedConfig {
       maxBookingsPerDay = entry.maxBookingsPerDay;
     }
 
+    let maxActiveBookings: number | undefined;
+    if (entry.maxActiveBookings !== undefined) {
+      if (
+        typeof entry.maxActiveBookings !== "number" ||
+        !Number.isFinite(entry.maxActiveBookings) ||
+        entry.maxActiveBookings < 0
+      ) {
+        throw new Error(`${ctx}: maxActiveBookings must be a non-negative finite number when set`);
+      }
+      maxActiveBookings = entry.maxActiveBookings;
+    }
+
+    // accessCode is optional. When a non-empty real value is set, the runner uses it to
+    // populate the ledger and skips the manage-bookings scrape. The literal placeholder
+    // "REPLACE_ME" is dropped here (treated as "not set") so half-filled configs still load.
+    let accessCode: string | undefined;
+    if (entry.accessCode !== undefined) {
+      const raw = nonEmptyString(entry.accessCode, "accessCode", ctx);
+      if (raw !== "REPLACE_ME") accessCode = raw;
+    }
+
     const acc: ConfigAccount = {
       id,
       label,
@@ -158,6 +188,8 @@ export function loadConfig(filePath: string): LoadedConfig {
       password,
       active: true,
       ...(maxBookingsPerDay !== undefined ? { maxBookingsPerDay } : {}),
+      ...(maxActiveBookings !== undefined ? { maxActiveBookings } : {}),
+      ...(accessCode !== undefined ? { accessCode } : {}),
     };
     accounts.push(acc);
   }

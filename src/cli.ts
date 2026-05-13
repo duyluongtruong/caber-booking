@@ -21,7 +21,9 @@ import {
   dryRunBookOneSession,
   runAdHocBookingSession,
   runBookingSession,
+  todayAtVenueISO,
 } from "./runner/runSession.js";
+import { LedgerStore } from "./ledger/store.js";
 import { getCardInput } from "./prompts/readCard.js";
 import {
   bookOneRequestedSpanExceedsTwoHours,
@@ -130,7 +132,14 @@ program
 
     let jobs;
     try {
-      jobs = planJobs(cfg.accounts, buildMondayThreeCourtTemplate(sessionDate));
+      const ledgerStore = new LedgerStore(LedgerStore.defaultPath());
+      const priorActive = ledgerStore.countActiveBookingsByAccount({
+        today: todayAtVenueISO(),
+        excludeSessionDate: sessionDate,
+      });
+      jobs = planJobs(cfg.accounts, buildMondayThreeCourtTemplate(sessionDate), {
+        priorActiveBookings: priorActive,
+      });
     } catch (e) {
       console.error("tennis-booking: plan failed:", e instanceof Error ? e.message : e);
       process.exitCode = 1;
@@ -329,12 +338,18 @@ program
 
       let jobs;
       try {
+        const ledgerStore = new LedgerStore(LedgerStore.defaultPath());
+        const priorActive = ledgerStore.countActiveBookingsByAccount({
+          today: todayAtVenueISO(),
+          excludeSessionDate: opts.date,
+        });
         jobs = planBookOneJobs(cfg, {
           sessionDate: opts.date,
           courtArg: opts.court,
           start: opts.start,
           end: opts.end,
           accountId: opts.account,
+          priorActiveBookings: priorActive,
         });
       } catch (e) {
         console.error("tennis-booking: plan failed:", e instanceof Error ? e.message : e);

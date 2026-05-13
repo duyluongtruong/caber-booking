@@ -70,6 +70,42 @@ export class LedgerStore {
   }
 
   /**
+   * Count active future bookings per account: rows whose `sessionDate >= today`, status is
+   * `confirmed | pending_pin | manual_override`, and (when `excludeSessionDate` is set)
+   * `sessionDate !== excludeSessionDate` so a re-plan for that session doesn't double-count
+   * its own rows. Used by the planner to enforce the venue's total active-booking cap
+   * (Caber Park: 5 simultaneously).
+   *
+   * Both `today` and `excludeSessionDate` must be `YYYY-MM-DD`. Comparison is lexicographic,
+   * which is correct for ISO 8601 dates.
+   */
+  countActiveBookingsByAccount(opts: {
+    today: string;
+    excludeSessionDate?: string;
+  }): Map<string, number> {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(opts.today)) {
+      throw new Error(`countActiveBookingsByAccount: today must be YYYY-MM-DD, got "${opts.today}"`);
+    }
+    if (opts.excludeSessionDate !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(opts.excludeSessionDate)) {
+      throw new Error(
+        `countActiveBookingsByAccount: excludeSessionDate must be YYYY-MM-DD, got "${opts.excludeSessionDate}"`,
+      );
+    }
+    const root = this.read();
+    const counts = new Map<string, number>();
+    for (const [date, rows] of Object.entries(root.sessions)) {
+      if (date < opts.today) continue;
+      if (opts.excludeSessionDate !== undefined && date === opts.excludeSessionDate) continue;
+      for (const r of rows) {
+        if (r.status === "confirmed" || r.status === "pending_pin" || r.status === "manual_override") {
+          counts.set(r.accountId, (counts.get(r.accountId) ?? 0) + 1);
+        }
+      }
+    }
+    return counts;
+  }
+
+  /**
    * Merge jobs from the planner into existing rows for the session (keyed by court + time window).
    * Rows for other court/time slots on the same date are preserved. All jobs must share the same
    * `sessionDate`.
