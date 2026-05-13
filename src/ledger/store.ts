@@ -156,6 +156,92 @@ export class LedgerStore {
     this.write(root);
   }
 
+  /**
+   * Bulk-set `accessCode` on ledger rows by `accountId`. Useful when you discover an account's
+   * stable gate PIN after the row was already written (e.g. a partner account that's never been
+   * booked yet — see also `accessCode` in `accounts.local.json`).
+   *
+   * Behaviour:
+   *   - If `accountId` is set, only rows matching that account are considered.
+   *   - For each candidate row, look up its target PIN:
+   *       1. `opts.pin` if provided (explicit override; ignores config); else
+   *       2. `opts.pinByAccount.get(row.accountId)` if provided.
+   *     Rows with no resolvable PIN are skipped.
+   *   - If the row already has `accessCode` set, it is left alone unless `opts.overwrite === true`.
+   *   - When `opts.dryRun === true`, the file is not written; the returned summary still reflects
+   *     what *would* have changed.
+   *
+   * Returns `{ updated, skipped, changes }` where `changes` describes each row that was (or would
+   * have been) modified.
+   */
+  fillAccessCodes(opts: {
+    accountId?: string;
+    pin?: string;
+    pinByAccount?: ReadonlyMap<string, string>;
+    overwrite?: boolean;
+    dryRun?: boolean;
+  }): {
+    updated: number;
+    skipped: number;
+    changes: Array<{
+      sessionDate: string;
+      courtLabel: string;
+      start: string;
+      end: string;
+      accountId: string;
+      from: string | undefined;
+      to: string;
+    }>;
+  } {
+    const root = this.read();
+    let updated = 0;
+    let skipped = 0;
+    const changes: Array<{
+      sessionDate: string;
+      courtLabel: string;
+      start: string;
+      end: string;
+      accountId: string;
+      from: string | undefined;
+      to: string;
+    }> = [];
+
+    for (const [sessionDate, rows] of Object.entries(root.sessions)) {
+      for (const row of rows) {
+        if (opts.accountId !== undefined && row.accountId !== opts.accountId) continue;
+        const target = opts.pin ?? opts.pinByAccount?.get(row.accountId);
+        if (target === undefined) {
+          skipped++;
+          continue;
+        }
+        if (row.accessCode !== undefined && !opts.overwrite) {
+          skipped++;
+          continue;
+        }
+        if (row.accessCode === target) {
+          skipped++;
+          continue;
+        }
+        changes.push({
+          sessionDate,
+          courtLabel: row.courtLabel,
+          start: row.start,
+          end: row.end,
+          accountId: row.accountId,
+          from: row.accessCode,
+          to: target,
+        });
+        row.accessCode = target;
+        updated++;
+      }
+    }
+
+    if (updated > 0 && !opts.dryRun) {
+      this.write(root);
+    }
+    return { updated, skipped, changes };
+  }
+
   updateRow(sessionDate: string, jobSequence: number, patch: LedgerRowPatch): void {
     const root = this.read();
     const rows = root.sessions[sessionDate];

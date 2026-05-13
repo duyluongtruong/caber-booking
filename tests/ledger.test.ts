@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import os from "node:os";
 import { LedgerStore } from "../src/ledger/store.ts";
 import type { PlannedJob } from "../src/planner/types.ts";
@@ -300,6 +300,116 @@ test("countActiveBookingsByAccount: excludeSessionDate omits a re-planned date s
       1,
       "the session being re-planned must not count toward its own cap",
     );
+  });
+});
+
+// --- fillAccessCodes ---
+
+function seedTwoRowsForFill(store: LedgerStore): void {
+  store.upsertFromPlannedJobs([
+    { sequence: 1, accountId: "4", courtLabel: "Court 1", start: "19:00", end: "21:00", sessionDate: "2026-06-01" },
+    { sequence: 2, accountId: "4", courtLabel: "Court 2", start: "19:00", end: "21:00", sessionDate: "2026-06-01" },
+  ]);
+  store.upsertFromPlannedJobs([
+    { sequence: 1, accountId: "1", courtLabel: "Court 1", start: "19:00", end: "21:00", sessionDate: "2026-06-08" },
+  ]);
+}
+
+test("fillAccessCodes: fills missing accessCodes from pinByAccount, leaves existing alone", () => {
+  withTempDir((dir) => {
+    const store = new LedgerStore(path.join(dir, "ledger.json"));
+    seedTwoRowsForFill(store);
+    store.updateRow("2026-06-08", 1, { accessCode: "3414" });
+
+    const result = store.fillAccessCodes({
+      pinByAccount: new Map([["4", "8789"], ["1", "9999"]]),
+    });
+    assert.equal(result.updated, 2, "two missing acc-4 rows get filled");
+    assert.equal(result.skipped, 1, "acc-1 row already had a code; skipped without --overwrite");
+
+    const all = [...store.getRows("2026-06-01"), ...store.getRows("2026-06-08")];
+    const byKey = new Map(all.map((r) => [`${r.sessionDate}|${r.courtLabel}`, r.accessCode]));
+    assert.equal(byKey.get("2026-06-01|Court 1"), "8789");
+    assert.equal(byKey.get("2026-06-01|Court 2"), "8789");
+    assert.equal(byKey.get("2026-06-08|Court 1"), "3414", "existing code preserved");
+  });
+});
+
+test("fillAccessCodes: --overwrite replaces existing values", () => {
+  withTempDir((dir) => {
+    const store = new LedgerStore(path.join(dir, "ledger.json"));
+    seedTwoRowsForFill(store);
+    store.updateRow("2026-06-08", 1, { accessCode: "3414" });
+
+    const result = store.fillAccessCodes({
+      pinByAccount: new Map([["1", "9999"]]),
+      overwrite: true,
+    });
+    assert.equal(result.updated, 1, "acc-1 row gets overwritten");
+    assert.equal(store.getRows("2026-06-08")[0].accessCode, "9999");
+  });
+});
+
+test("fillAccessCodes: --account filter only touches matching rows", () => {
+  withTempDir((dir) => {
+    const store = new LedgerStore(path.join(dir, "ledger.json"));
+    seedTwoRowsForFill(store);
+
+    const result = store.fillAccessCodes({
+      accountId: "4",
+      pinByAccount: new Map([["4", "8789"], ["1", "9999"]]),
+    });
+    assert.equal(result.updated, 2);
+    assert.equal(store.getRows("2026-06-01")[0].accessCode, "8789");
+    assert.equal(store.getRows("2026-06-08")[0].accessCode, undefined, "non-matching account untouched");
+  });
+});
+
+test("fillAccessCodes: explicit --pin overrides pinByAccount", () => {
+  withTempDir((dir) => {
+    const store = new LedgerStore(path.join(dir, "ledger.json"));
+    seedTwoRowsForFill(store);
+
+    const result = store.fillAccessCodes({
+      accountId: "4",
+      pin: "1234",
+      pinByAccount: new Map([["4", "WRONG"]]),
+    });
+    assert.equal(result.updated, 2);
+    assert.equal(store.getRows("2026-06-01")[0].accessCode, "1234");
+  });
+});
+
+test("fillAccessCodes: rows whose target PIN equals current value are reported as skipped, not updated", () => {
+  withTempDir((dir) => {
+    const store = new LedgerStore(path.join(dir, "ledger.json"));
+    seedTwoRowsForFill(store);
+    store.updateRow("2026-06-01", 1, { accessCode: "8789" });
+
+    const result = store.fillAccessCodes({
+      pinByAccount: new Map([["4", "8789"]]),
+      overwrite: true,
+    });
+    assert.equal(result.updated, 1, "only Court 2 actually changes (Court 1 already matches)");
+    assert.equal(result.skipped, 2, "Court 1 acc-4 (no-op) + acc-1 row (no PIN configured)");
+  });
+});
+
+test("fillAccessCodes: dry-run leaves file unchanged but reports changes", () => {
+  withTempDir((dir) => {
+    const filePath = path.join(dir, "ledger.json");
+    const store = new LedgerStore(filePath);
+    seedTwoRowsForFill(store);
+    const before = JSON.parse(readFileSync(filePath, "utf8"));
+
+    const result = store.fillAccessCodes({
+      pinByAccount: new Map([["4", "8789"]]),
+      dryRun: true,
+    });
+    assert.equal(result.updated, 2);
+    assert.equal(result.changes.length, 2);
+    const after = JSON.parse(readFileSync(filePath, "utf8"));
+    assert.deepEqual(after, before, "dry-run must not write");
   });
 });
 

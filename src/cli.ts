@@ -77,6 +77,87 @@ configCmd
 
 program.addCommand(configCmd);
 
+const ledgerCmd = new Command("ledger").description("Inspect or patch the local booking ledger");
+
+ledgerCmd
+  .command("fill-pins")
+  .description(
+    "Set accessCode on ledger rows by accountId. Default: fills missing accessCodes only, using each account's configured accessCode from config. Use --pin to override the source value; --overwrite to replace existing PINs too.",
+  )
+  .option("--account <id>", "Only touch rows whose accountId matches this id")
+  .option("--pin <value>", "Explicit PIN to write (ignores config's accessCode). Pair with --account for safety.")
+  .option("--overwrite", "Also overwrite rows that already have an accessCode (default: fill missing only)", false)
+  .option("--dry-run", "Print what would change without writing the ledger", false)
+  .option("-c, --config <path>", "accounts JSON path (else TENNIS_BOOKING_ACCOUNTS or config/accounts.local.json)")
+  .action(
+    (opts: { account?: string; pin?: string; overwrite: boolean; dryRun: boolean; config?: string }) => {
+      const configPath = resolveCliConfigPath(opts.config);
+      if (!existsSync(configPath)) {
+        console.error(`tennis-booking: config file not found: ${configPath}`);
+        process.exitCode = 1;
+        return;
+      }
+
+      let cfg;
+      try {
+        cfg = loadConfig(configPath);
+      } catch (e) {
+        console.error("tennis-booking:", e instanceof Error ? e.message : e);
+        process.exitCode = 1;
+        return;
+      }
+
+      const pinByAccount = new Map<string, string>();
+      for (const a of cfg.accounts) {
+        if (a.accessCode !== undefined) pinByAccount.set(a.id, a.accessCode);
+      }
+
+      if (opts.pin !== undefined && opts.account === undefined) {
+        console.error(
+          "tennis-booking: --pin without --account would apply the same PIN to every row across all accounts. Refuse to do this implicitly; add --account <id> to confirm scope.",
+        );
+        process.exitCode = 1;
+        return;
+      }
+
+      if (
+        opts.pin === undefined &&
+        opts.account !== undefined &&
+        !pinByAccount.has(opts.account)
+      ) {
+        console.error(
+          `tennis-booking: no accessCode configured for account "${opts.account}" in ${configPath}. Either set it in config or pass --pin <value>.`,
+        );
+        process.exitCode = 1;
+        return;
+      }
+
+      const store = new LedgerStore(LedgerStore.defaultPath());
+      const result = store.fillAccessCodes({
+        accountId: opts.account,
+        pin: opts.pin,
+        pinByAccount,
+        overwrite: opts.overwrite,
+        dryRun: opts.dryRun,
+      });
+
+      const prefix = opts.dryRun ? "ledger fill-pins (dry run)" : "ledger fill-pins";
+      if (result.changes.length === 0) {
+        console.error(`${prefix}: no rows changed (updated=0, skipped=${result.skipped})`);
+        return;
+      }
+      console.error(
+        `${prefix}: ${opts.dryRun ? "would update" : "updated"} ${result.updated} row(s); skipped ${result.skipped}`,
+      );
+      for (const c of result.changes) {
+        const from = c.from === undefined ? "(unset)" : c.from;
+        console.error(`  ${c.sessionDate} ${c.courtLabel} ${c.start}-${c.end} acc=${c.accountId}: ${from} → ${c.to}`);
+      }
+    },
+  );
+
+program.addCommand(ledgerCmd);
+
 program
   .command("dry-run")
   .description(
