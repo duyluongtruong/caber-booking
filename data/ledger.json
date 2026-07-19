@@ -714,6 +714,124 @@
         "status": "confirmed",
         "accessCode": "2451"
       }
+    ],
+    "2026-08-10": [
+      {
+        "sessionDate": "2026-08-10",
+        "courtLabel": "Court 1",
+        "start": "19:00",
+        "end": "21:00",
+        "accountId": "2",
+        "jobSequence": 1,
+        "status": "not_started"
+      },
+      {
+        "sessionDate": "2026-08-10",
+        "courtLabel": "Court 2",
+        "start": "19:00",
+        "end": "21:00",
+        "accountId": "4",
+        "jobSequence": 2,
+        "status": "not_started"
+      },
+      {
+        "sessionDate": "2026-08-10",
+        "courtLabel": "Court 3",
+        "start": "19:00",
+        "end": "21:00",
+        "accountId": "5",
+        "jobSequence": 3,
+        "status": "not_started"
+      },
+      {
+        "sessionDate": "2026-08-10",
+        "courtLabel": "Court 1",
+        "start": "21:00",
+        "end": "22:00",
+        "accountId": "4",
+        "jobSequence": 4,
+        "status": "not_started"
+      },
+      {
+        "sessionDate": "2026-08-10",
+        "courtLabel": "Court 2",
+        "start": "21:00",
+        "end": "22:00",
+        "accountId": "5",
+        "jobSequence": 5,
+        "status": "not_started"
+      },
+      {
+        "sessionDate": "2026-08-10",
+        "courtLabel": "Court 3",
+        "start": "21:00",
+        "end": "22:00",
+        "accountId": "6",
+        "jobSequence": 6,
+        "status": "not_started"
+      }
+    ],
+    "2026-08-17": [
+      {
+        "sessionDate": "2026-08-17",
+        "courtLabel": "Court 1",
+        "start": "19:00",
+        "end": "21:00",
+        "accountId": "manual_booking",
+        "jobSequence": 1,
+        "status": "confirmed",
+        "accessCode": "3835"
+      },
+      {
+        "sessionDate": "2026-08-17",
+        "courtLabel": "Court 1",
+        "start": "21:00",
+        "end": "22:00",
+        "accountId": "manual_booking",
+        "jobSequence": 1,
+        "status": "confirmed",
+        "accessCode": "4414"
+      },
+      {
+        "sessionDate": "2026-08-17",
+        "courtLabel": "Court 2",
+        "start": "19:00",
+        "end": "21:00",
+        "accountId": "manual_booking",
+        "jobSequence": 1,
+        "status": "confirmed",
+        "accessCode": "3835"
+      },
+      {
+        "sessionDate": "2026-08-17",
+        "courtLabel": "Court 2",
+        "start": "21:00",
+        "end": "22:00",
+        "accountId": "2",
+        "jobSequence": 1,
+        "status": "confirmed",
+        "accessCode": "0782"
+      },
+      {
+        "sessionDate": "2026-08-17",
+        "courtLabel": "Court 3",
+        "start": "19:30",
+        "end": "21:30",
+        "accountId": "manual_booking",
+        "jobSequence": 1,
+        "status": "confirmed",
+        "accessCode": "3835"
+      },
+      {
+        "sessionDate": "2026-08-17",
+        "courtLabel": "Court 3",
+        "start": "21:30",
+        "end": "22:00",
+        "accountId": "2",
+        "jobSequence": 1,
+        "status": "confirmed",
+        "accessCode": "0782"
+      }
     ]
   }
 }
