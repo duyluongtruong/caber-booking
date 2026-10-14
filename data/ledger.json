@@ -524,7 +524,8 @@
         "end": "21:00",
         "accountId": "4",
         "jobSequence": 3,
-        "status": "8789"
+        "status": "confirmed",
+        "accessCode": "8789"
       },
       {
         "sessionDate": "2026-10-26",
